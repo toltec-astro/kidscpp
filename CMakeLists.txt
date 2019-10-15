@@ -33,15 +33,15 @@ GenVersionHeader(${CMAKE_CURRENT_BINARY_DIR})
 add_library(kids_core STATIC)
 target_sources(kids_core
     PRIVATE
-        "src/core/io.cpp"
-        "src/toltec/dirfile.cpp"
-        "src/toltec/ncfile.cpp"
-        "src/sweep/finder.cpp"
-        "src/sweep/finderresult.cpp"
-        "src/sweep/fitter.cpp"
-        "src/sweep/fitresult.cpp"
-        "src/timestream/solver.cpp"
-        "src/timestream/solverresult.cpp"
+        "src/kids/core/io.cpp"
+        "src/kids/toltec/dirfile.cpp"
+        "src/kids/toltec/ncfile.cpp"
+        "src/kids/sweep/finder.cpp"
+        "src/kids/sweep/finderresult.cpp"
+        "src/kids/sweep/fitter.cpp"
+        "src/kids/sweep/fitresult.cpp"
+        "src/kids/timestream/solver.cpp"
+        "src/kids/timestream/solverresult.cpp"
         )
 
 target_link_libraries(kids_core
