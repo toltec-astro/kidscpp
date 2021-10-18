@@ -49,7 +49,7 @@ void kids::KidsDataProc::solve(const TimeStreamSolver &solver,
                 auto nchunks = chunks.size();
                 SPDLOG_INFO("solve by chunks size={} nchunks={}", chunksize,
                             nchunks);
-                auto ex = grppiex::dyn_ex(rc.get_str("grppiex"));
+                auto ex = tula::grppi_utils::dyn_ex(rc.get_str("grppiex"));
                 {
                     logging::scoped_timeit l0("solve by chunk");
                     logging::progressbar pb0(
