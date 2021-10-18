@@ -1,9 +1,9 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <utils/algorithm/ei_polyfit.h>
-#include <utils/formatter/matrix.h>
-#include <utils/logging.h>
-#include <utils/utils.h>
+#include <tula/algorithm/ei_polyfit.h>
+#include <tula/formatter/matrix.h>
+#include <tula/logging.h>
+#include <tula/utils.h>
 
 namespace {
 using namespace ::testing;

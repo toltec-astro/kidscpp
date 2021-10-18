@@ -10,7 +10,7 @@ project(kidscpp
 include(FetchContent)
 FetchContent_Declare(
   tula
-  GIT_REPOSITORY ${PROJECT_SOURCE_DIR}/../tula
+  GIT_REPOSITORY https://github.com/toltec-astro/tula.git
   GIT_TAG        "main"
 )
 FetchContent_MakeAvailable(tula)
