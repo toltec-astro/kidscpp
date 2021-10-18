@@ -360,7 +360,7 @@ tone_axis_t IO<DataFormat::NcFile>::tone_axis_evaluator::evaluate(
         auto hdr = tula::nc_utils::getstrs(nc.var("tonemodelparamsheader"));
         SPDLOG_TRACE("tone model params header: {}", hdr);
         // populate the tone params table
-        assert(SIZET(meta.get_typed<int>("ntonemodelparams")) == hdr.size());
+        assert(TULA_SIZET(meta.get_typed<int>("ntonemodelparams")) == hdr.size());
         toneparamsheader.reserve(toneparamsheader.size() + hdr.size());
         toneparamsheader.insert(toneparamsheader.end(),
                                 std::make_move_iterator(hdr.begin()),
@@ -431,7 +431,7 @@ tone_axis_t IO<DataFormat::NcFile>::tone_axis_evaluator::evaluate(
         toneparams.bottomRows(ntonemodelparams) = std::move(tps);
     }
     SPDLOG_TRACE("tone params{}", toneparams);
-    assert(SIZET(toneparams.rows()) == toneparamsheader.size());
+    assert(TULA_SIZET(toneparams.rows()) == toneparamsheader.size());
     return {std::move(toneparams), std::move(toneparamsheader)};
 }
 
@@ -611,7 +611,7 @@ time_axis_t IO<DataFormat::NcFile>::time_axis_slice(IndexSlice slice) const {
             const auto &v_times = nc.var("times");
             auto ntimes_all = meta.get_typed<int>("ntimes_all");
             auto ctimes = tula::meta::size_cast<Index>(timesheader.size());
-            assert(SIZET(ctimes) == v_times.getDim(1).getSize());
+            assert(TULA_SIZET(ctimes) == v_times.getDim(1).getSize());
             auto _slice = tula::container_utils::to_indices(slice, ntimes_all);
             const auto &[start, stop, step, size] = _slice;
             SPDLOG_TRACE("read time with index range {}", _slice);

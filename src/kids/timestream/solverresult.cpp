@@ -248,8 +248,8 @@ kids::TimeStreamSolverResult::append_to_nc(NcFileIO &io) const {
         std::vector<std::size_t> s_t{1, d_ntimecols.getSize()};
 
         const auto &tdata = data.wcs.time_axis.data;
-        assert(d_ntimecols.getSize() == SIZET(tdata.cols()));
-        assert(d_ntones.getSize() == SIZET(data_out.xs.data.cols()));
+        assert(d_ntimecols.getSize() == TULA_SIZET(tdata.cols()));
+        assert(d_ntones.getSize() == TULA_SIZET(data_out.xs.data.cols()));
         auto ntimes = data_out.xs.data.rows();
         {
             tula::logging::progressbar pb0(
