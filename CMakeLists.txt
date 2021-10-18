@@ -125,5 +125,5 @@ if (KIDSCPP_STANDALONE)
 endif()
 
 # Create concfig headers
-generate_gitversion_header(${CMAKE_PROJECT_NAME})
-generate_config_header(${CMAKE_PROJECT_NAME})
+generate_gitversion_header(${PROJECT_NAME})
+generate_config_header(${PROJECT_NAME})
