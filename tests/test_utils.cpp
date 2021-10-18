@@ -14,7 +14,7 @@ TEST(algorithm, polyfit_1) {
     xdata.setLinSpaced(10, 0, 9);
     VectorXd ydata = xdata.array() * 2. - 3;
 
-    auto [p, r] = alg::polyfit(xdata, ydata, 1);
+    auto [p, r] = tula::alg::polyfit(xdata, ydata, 1);
     SPDLOG_TRACE("x{} y{} p{} r{}", xdata, ydata, p, r);
 }
 
@@ -24,7 +24,7 @@ TEST(algorithm, polyfit_2) {
     xdata.setLinSpaced(10, 0, 9);
     VectorXd ydata = xdata.array().square() + xdata.array() * 2. - 3;
     xdata.array() *= 1e7;
-    auto [p, r] = alg::polyfit(xdata, ydata, 2);
+    auto [p, r] = tula::alg::polyfit(xdata, ydata, 2);
     SPDLOG_TRACE("x{} y{} p{} r{}", xdata, ydata, p, r);
 }
 

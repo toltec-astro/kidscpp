@@ -3,6 +3,7 @@
 [Dd]ocs/*
 CMakeCache.*
 CMakeFiles/*
+CMakeUserPresets.json
 [Tt]esting/*
 
 ### VisualStudioCode ###

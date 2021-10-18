@@ -1,5 +1,7 @@
 project (kids_test LANGUAGES CXX C)
 
+include(testing)
+
 add_executable(kids_test EXCLUDE_FROM_ALL)
 set_target_properties(kids_test
     PROPERTIES
@@ -12,14 +14,10 @@ target_sources(kids_test
         test_toltec_ncfile.cpp
         test_welch.cpp
     )
-target_include_directories(kids_test
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-    )
 target_link_libraries(kids_test
     PRIVATE
-        gtest gmock benchmark
-        kids_core
+        kids::kids
+        tula::testing
     )
 add_dependencies(check kids_test)
 gtest_discover_tests(

@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
                     // fr = fp / (x + 1)
                     m.row(3) = fs.array() / (xs.array() + 1);
                     for (int j = 0; j < n_detectors; ++j) {
-                    alg::ceresfit::eval<Model>(
+                    tula::alg::ceresfit::eval<Model>(
                         fs.segment(j, 1), m.col(j), iqs.block(i, j, 1, 1));
                     }
                 }
