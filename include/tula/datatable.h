@@ -360,7 +360,7 @@ template <> struct IO<Format::ecsv> {
                 SPDLOG_TRACE("parsed ecsv "
                              "header:\ncolnames:\n{}\ndtypes:\n{}\nmeta:\n{}",
                              colnames_, dtypes, YAML::Dump(meta_));
-                return std::tuple{std::move(colnames_), std::move(meta_)};
+                return std::tuple{tula::container_utils::to_stdvec(colnames_), std::move(meta_)};
             } catch (tula::ecsv::ParseError) {
                 throw ParseError(fmt::format(
                     "unable to parse as ECSV lines: {}", lines_read));
@@ -403,7 +403,7 @@ template <> struct IO<Format::ecsv> {
             data.emplace_back(buf_data);
         }
         if (colnames != nullptr) {
-            *colnames = tula::container_utils::to_stdvec(colnames_);
+            *colnames = colnames_;
         }
         if (meta != nullptr) {
             *meta = meta_;
