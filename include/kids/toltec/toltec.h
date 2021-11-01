@@ -84,7 +84,7 @@ private:                                                                       \
     struct name##_evaluator {                                                  \
         static auto evaluate(const IO &) -> type;                              \
     };                                                                         \
-    tula::nddata::CachedData<type, TULA_LIFT(name##_evaluator::evaluate)>      \
+    tula::nddata::CachedData<type, &name##_evaluator::evaluate>      \
         m_##name{};
 
     // clang-format off
