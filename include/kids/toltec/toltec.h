@@ -70,9 +70,7 @@ private:
     struct data_reducer_segments_evaluator {
         static auto evaluate(const IO &) -> data_reducer_segments_t;
     };
-    tula::nddata::CachedData<data_reducer_segments_t,
-                             TULA_LIFT(
-                                 data_reducer_segments_evaluator::evaluate)>
+    tula::nddata::CachedData<data_reducer_segments_t, &data_reducer_segments_evaluator::evaluate>
         m_data_reducer_segments{};
 
 #define io_lazy_getter(name, type)                                             \

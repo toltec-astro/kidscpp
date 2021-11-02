@@ -127,6 +127,8 @@ requires(tula::enum_utils::is_compound_v<kind_>) struct KidsDataBase<
 struct ToneAxis : wcs::Axis<ToneAxis, wcs::CoordsKind::Column>,
                   wcs::LabeledData<ToneAxis>,
                   tula::nddata::EigenData<Eigen::MatrixXd> {
+    using wcs::LabeledData<ToneAxis>::operator();
+    using tula::nddata::EigenData<Eigen::MatrixXd> ::operator();
     ToneAxis() = default;
     ToneAxis(Eigen::MatrixXd data_,
              tula::nddata::LabelMapper<ToneAxis> row_labels_)
@@ -156,11 +158,12 @@ struct SweepFrame : wcs::Frame2D<SweepFrame, SweepAxis, ToneAxis> {
     auto fs() const -> const auto & { return m_fs(*this); }
 
 private:
-    struct tula::nddata::CachedData < Eigen::MatrixXd, [](const auto &frame) {
+    constexpr static auto fs_evaluator = [](const auto &frame) {
         auto tfs = frame.tone_axis("f_tone");
         auto sfs = frame.sweep_axis();
         return sfs.replicate(1, tfs.size()) + tfs.replicate(sfs.size(), 1);
-    } > m_fs;
+    };
+    struct tula::nddata::CachedData < Eigen::MatrixXd, fs_evaluator> m_fs;
 };
 
 struct TimeAxis : wcs::Axis<TimeAxis, wcs::CoordsKind::Row>,
