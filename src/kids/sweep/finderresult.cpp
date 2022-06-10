@@ -1,8 +1,12 @@
 #include "kids/sweep/finder.h"
 #include <tula/algorithm/ei_stats.h>
+#include <tula/eigen.h>
 #include <tula/datatable.h>
 #include <tula/filename.h>
-// #include <tula/matplotlibcpp.h>
+#include <tula/meta.h>
+#ifdef WITH_PLOTTING
+#include <matplotlibcpp.h>
+#endif
 #include <tula/nc.h>
 
 using kids::SweepKidsFinderResult;
@@ -314,18 +318,18 @@ void SweepKidsFinderResult::save_processed(const std::string &filepath_) const {
 }
 
 void SweepKidsFinderResult::plot() const {
-    /*
-    namespace eiu = eigen_utils;
+    #ifdef WITH_PLOTTING
+    namespace eiu = tula::eigen_utils;
     namespace plt = matplotlibcpp;
     using Eigen::Index;
 
     // data geometry
     Index nfs;
     std::tie(nfs, std::ignore) = tula::alg::shape(adiqs);
-    auto rfsvec = eiu::tostd(rfs);
-    auto adiqsvec = eiu::tostd(adiqs);
-    auto adiqsmeanvec = eiu::tostd(adiqsmean);
-    auto adiqs1sigvec = eiu::tostd(adiqsmean + adiqsstd);
+    auto rfsvec = eiu::to_stdvec(rfs);
+    auto adiqsvec = eiu::to_stdvec(adiqs);
+    auto adiqsmeanvec = eiu::to_stdvec(adiqsmean);
+    auto adiqs1sigvec = eiu::to_stdvec(adiqsmean + adiqsstd);
     // double flo = data.meta.get<double>("lofreq");
 
     // setup canvas
@@ -379,15 +383,16 @@ void SweepKidsFinderResult::plot() const {
         plt::ylabel(s21label);
         // plt::plot(fsvec, eiu::tostd(adiqs), vecstyle);
         for (Index i = 0; i < data.tones().size(); ++i) {
-            auto fsvec = eiu::tostd(data.fs().col(i));
-            auto iqsvec = eiu::tostd(data.iqs().col(i).array().abs());
+            auto fsvec = eiu::to_stdvec(data.fs().col(i));
+            auto iqsvec = eiu::to_stdvec(data.iqs().col(i).array().abs());
             plt::plot(fsvec, iqsvec, (i % 2 == 0) ? vecstyle : vecstyle0);
         }
         if (output.rows() > 0) {
             for (auto u : unique_candidates) {
                 auto [i, t, c] = u;
                 plt::axvline(
-                    itersteps[SIZET(t)].candsfitresult.output.coeff(c, 0),
+                    itersteps[TULA_SIZET(t)].candsfitresult.output.coeff(c, 0),
+                    0., 1.,
                     candstyle);
                 // plt::axvline(
                 //    itersteps[SIZET(t)].candsfitresult.output.coeff(c, 1),
@@ -398,30 +403,32 @@ void SweepKidsFinderResult::plot() const {
         plt::ylabel(d21label);
         // plt::plot(fsvec, eiu::tostd(adiqs), vecstyle);
         plt::plot(rfsvec, adiqsvec, vecstyle);
-        plt::axhline(0., baselinestyle);
+        plt::axhline(0., 0., 1., baselinestyle);
         plt::plot(rfsvec, adiqsmeanvec, meanstyle);
         plt::plot(rfsvec, adiqs1sigvec, stdstyle);
         plt::plot(rfsvec,
-                  eiu::tostd(adiqsmean + adiqsstd * threshold * adiqs_fcor),
+                  eiu::to_stdvec(adiqsmean.array() + adiqsstd.array()  * threshold * adiqs_fcor.array()),
                   cutstyle);
     }
     if (output.rows() > 0) {
         // niter = 0; // disable the iterstep plots
         // plot residual
         const auto &residual = itersteps.back().residual;
-        plt::plot(rfsvec, eiu::tostd(residual), resstyle);
+        plt::plot(rfsvec, eiu::to_stdvec(residual), resstyle);
         plt::ylim(-0.1, adiqsstd.maxCoeff() * threshold);
         for (auto u : unique_candidates) {
             auto [i, t, c] = u;
-            plt::axvline(itersteps[SIZET(t)].candsfitresult.output.coeff(c, 0),
+            plt::axvline(itersteps[TULA_SIZET(t)].candsfitresult.output.coeff(c, 0),
+                    0., 1.,
                          candstyle);
-            plt::axvline(itersteps[SIZET(t)].candsfitresult.output.coeff(c, 1),
+            plt::axvline(itersteps[TULA_SIZET(t)].candsfitresult.output.coeff(c, 1),
+                    0., 1.,
                          fitstyle);
         }
         for (Index i = iter0; i < niter; ++i) {
             auto ip = i - iter0;
             plt::subplot(npanels, 1, ip + 3, true);
-            const auto &it = itersteps[SIZET(i)];
+            const auto &it = itersteps[TULA_SIZET(i)];
             // plt::plot(fsvec, eiu::tostd(it.adiqs), vecstyle);
             //             plt::plot(eiu::tostd(stats_fs),
             //                       eiu::tostd(Eigen::VectorXd::Zero(stats_fs.size())),
@@ -429,10 +436,10 @@ void SweepKidsFinderResult::plot() const {
             plt::plot(rfsvec, adiqsmeanvec, meanstyle);
             plt::plot(rfsvec, adiqs1sigvec, stdstyle);
             plt::plot(rfsvec,
-                      eiu::tostd(adiqsmean + adiqsstd * it.thresh * adiqs_fcor),
+                      eiu::to_stdvec(adiqsmean.array() + adiqsstd.array() * it.thresh * adiqs_fcor.array()),
                       cutstyle);
             plt::plot(rfsvec, adiqsvec, vecstyle);
-            plt::plot(rfsvec, eiu::tostd(it.residual), resstyle);
+            plt::plot(rfsvec, eiu::to_stdvec(it.residual), resstyle);
             std::map<std::string, std::string> segstyle{seg0style};
             // per segment coloring
             for (std::size_t j = 0; j < it.segments.size(); ++j) {
@@ -442,12 +449,12 @@ void SweepKidsFinderResult::plot() const {
                                          (j % 2 == 1) ? 0xbb : 0x55);
                 // SPDLOG_TRACE("color={}", color);
                 segstyle["color"] = color;
-                plt::plot(eiu::tostd(rfs.segment(si, ei - si)),
-                          eiu::tostd(it.iterdata.segment(si, ei - si)),
+                plt::plot(eiu::to_stdvec(rfs.segment(si, ei - si)),
+                          eiu::to_stdvec(it.iterdata.segment(si, ei - si)),
                           segstyle);
-                plt::axvline(rfs.coeff(it.cands[j]), candstyle);
+                plt::axvline(rfs.coeff(it.cands[j]), 0., 1., candstyle);
                 // plot fitresult
-                plt::axvline(it.candsfitresult.output.coeff(j, 1), fitstyle);
+                plt::axvline(it.candsfitresult.output.coeff(j, 1), 0., 1., fitstyle);
                 plt::text(
                     it.candsfitresult.output.coeff(j, 1), -10.,
                     fmt::format("{}",
@@ -459,7 +466,7 @@ void SweepKidsFinderResult::plot() const {
     }
     plt::show();
     // itersteps.back().fitresult.plot();
-    */
+    #endif
 }
 
 void SweepKidsFinderResult::save_plot(const std::string &filepath) const {}

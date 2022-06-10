@@ -9,7 +9,7 @@
 #include <tula/formatter/matrix.h>
 #include <tula/formatter/utils.h>
 #include <tula/logging.h>
-#include <tula/nddata/cacheddata.h>
+// #include <tula/nddata/cacheddata.h>
 #include <tula/nddata/core.h>
 #include <tula/nddata/labelmapper.h>
 
@@ -155,15 +155,20 @@ struct SweepFrame : wcs::Frame2D<SweepFrame, SweepAxis, ToneAxis> {
     // Frame2D impl
     auto row_axis() const noexcept -> const SweepAxis & { return sweep_axis; }
     auto col_axis() const noexcept -> const ToneAxis & { return tone_axis; }
-    auto fs() const -> const auto & { return m_fs(*this); }
+    // auto fs() const -> const auto & { return m_fs(*this); }
+    auto fs() const -> const Eigen::MatrixXd {
+        auto tfs = this->tone_axis("f_tone");
+        auto sfs = this->sweep_axis();
+        return sfs.replicate(1, tfs.size()) + tfs.replicate(sfs.size(), 1);
+    }
 
 private:
-    constexpr static auto fs_evaluator = [](const auto &frame) {
-        auto tfs = frame.tone_axis("f_tone");
-        auto sfs = frame.sweep_axis();
-        return sfs.replicate(1, tfs.size()) + tfs.replicate(sfs.size(), 1);
-    };
-    struct tula::nddata::CachedData < Eigen::MatrixXd, fs_evaluator> m_fs;
+    // constexpr static auto fs_evaluator = [](const auto &frame) {
+    //     auto tfs = frame.tone_axis("f_tone");
+    //     auto sfs = frame.sweep_axis();
+    //     return sfs.replicate(1, tfs.size()) + tfs.replicate(sfs.size(), 1);
+    // };
+    // struct tula::nddata::CachedData < Eigen::MatrixXd, fs_evaluator> m_fs;
 };
 
 struct TimeAxis : wcs::Axis<TimeAxis, wcs::CoordsKind::Row>,
@@ -205,7 +210,7 @@ struct Sweep : internal::KidsDataBase<Derived>,
     auto sweeps() const noexcept -> const auto & {
         return derived().wcs.sweep_axis();
     }
-    auto fs() const noexcept -> const auto & { return derived().wcs.fs(); }
+    auto fs() const noexcept -> decltype(auto) { return derived().wcs.fs(); }
     // data objects
     tula::nddata::EigenData<Eigen::MatrixXcd> iqs;
     tula::nddata::EigenData<Eigen::MatrixXcd> eiqs; // uncertainty

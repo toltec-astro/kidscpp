@@ -75,13 +75,19 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
         auto tonestep = tula::alg::step(data.tones());
         auto sweepspan = tula::alg::span(data.sweeps());
         auto coverage = int(round(sweepspan / tonestep));
+        SPDLOG_TRACE("tonestep={:g}Hz sweepspan={:g}Hz coverage={}", tonestep, sweepspan, coverage);
         sweepstep = tula::alg::step(data.sweeps());
         toneranges.resize(2, ntones);
         toneranges.row(0) = data.fs().colwise().minCoeff();
         toneranges.row(1) = data.fs().colwise().maxCoeff();
+        SPDLOG_TRACE(
+                "toneranges{} tonespan={:g}Hz",
+                toneranges,
+                toneranges.row(1).maxCoeff() - toneranges.row(0).minCoeff()
+                );
         // SPDLOG_TRACE(
-        //   "fs{:r0} iqs{:r0} tonespan={:g}Hz tonestep={:g}Hz sweepspan={:g}Hz
-        //   sweepstep={:g}Hz coverage={}", data.fs(), data.iqs(),
+        //   "fs{:r0} iqs{:r0} tonespan={:g}Hz tonestep={:g}Hz sweepspan={:g}Hz sweepstep={:g}Hz coverage={}",
+        //   data.fs(), data.iqs(),
         //   toneranges.row(1).maxCoeff() - toneranges.row(0).minCoeff(),
         //   tonestep, sweepspan, sweepstep, coverage);
         assert(coverage == 2);
@@ -91,10 +97,10 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
         double rfmax = vmax.value_or(toneranges.row(1).maxCoeff());
         // compute sweep coverage
         rfstep = step.value_or(sweepstep / coverage);
+        SPDLOG_TRACE("resample grid [{}:{}:{}]", rfmin, rfmax, rfstep);
         rfs = tula::alg::arange(rfmin, rfmax, rfstep);
         nrfs = rfs.size();
-        SPDLOG_TRACE("resample grid [{}:{}:{}] fs{}", rfmin, rfmax, rfstep,
-                     rfs);
+        SPDLOG_TRACE("resampled fs{}", rfs);
     }
     // make unified adiqs
     Eigen::MatrixXcd iqs(data.iqs()); // make a copy of the iqs data in case
@@ -349,9 +355,9 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
             // to account for the 1/f factor in the height of d21
             auto selectmask =
                 (iterdata.array() >
-                 (adiqsmean + adiqsstd * thresh * adiqs_fcor).array())
+                 (adiqsmean.array() + adiqsstd.array() * thresh * adiqs_fcor.array()))
                     .eval();
-            // SPDLOG_INFO("selectmask{}", selectmask);
+            SPDLOG_TRACE("selectmask{}", selectmask);
             std::vector<Index> selected; // index that is above the thresh
             selected.reserve(TULA_SIZET(nrfs));
             for (Index i = 0; i < nrfs; ++i) {
@@ -367,7 +373,7 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
                     ++(segments.back().second);
                 }
             }
-            // SPDLOG_INFO("segments{}", segments);
+            SPDLOG_TRACE("segments{}", segments);
             // filter the segments and compute the centers using argmax
             cands.reserve(segments.size());
             segments.erase(std::remove_if(segments.begin(), segments.end(),

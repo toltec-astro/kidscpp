@@ -79,6 +79,15 @@ target_sources(kids
         )
 target_include_directories(kids PUBLIC "include")
 target_link_libraries(kids PUBLIC ${dep_libs})
+
+option(KIDS_WITH_PLOTTING "Enable plotting" OFF)
+if (KIDS_WITH_PLOTTING)
+
+    include(Matplotlibcpp)
+    target_link_libraries(kids PUBLIC tula::Matplotlibcpp)
+    target_compile_definitions(kids PUBLIC WITH_PLOTTING)
+endif()
+
 add_library(kids::kids ALIAS kids)
 
 ## optional targets
