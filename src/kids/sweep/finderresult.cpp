@@ -415,7 +415,7 @@ void SweepKidsFinderResult::plot() const {
         // plot residual
         const auto &residual = itersteps.back().residual;
         plt::plot(rfsvec, eiu::to_stdvec(residual), resstyle);
-        plt::ylim(-0.1, adiqsstd.maxCoeff() * threshold);
+        plt::ylim(-0.1, adiqsstd.maxCoeff() * 10);
         for (auto u : unique_candidates) {
             auto [i, t, c] = u;
             plt::axvline(itersteps[TULA_SIZET(t)].candsfitresult.output.coeff(c, 0),

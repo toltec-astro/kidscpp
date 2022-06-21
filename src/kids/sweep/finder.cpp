@@ -28,11 +28,11 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
     Config config{this->config};
 
     // some internal configs
-    config.set("data_smooth_size", 0);
+    // config.set("data_smooth_size", 30);
     config.set("resample_exclude_edge", 8e3); // 8e4
 
     // stats
-    config.set("stats_clip_sigma", 3.0);
+    // config.set("stats_clip_sigma", 1.5);
     config.set("stats_clip_maxiter", 5);
     config.set("stats_window_width", 5e6);
     config.set("stats_stride_width", 4e6);
