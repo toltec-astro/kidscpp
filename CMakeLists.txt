@@ -64,6 +64,9 @@ set(dep_libs ${dep_libs} tula::Csv)
 include(Re2)
 set(dep_libs ${dep_libs} tula::Re2)
 
+include(GramSavgol)
+set(dep_libs ${dep_libs} tula::GramSavgol)
+
 add_library(kids STATIC)
 target_sources(kids
     PRIVATE

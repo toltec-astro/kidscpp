@@ -14,6 +14,8 @@
 #include <tula/formatter/matrix.h>
 #include <tula/grppi.h>
 #include <tula/logging.h>
+#include <gram_savitzky_golay/gram_savitzky_golay.h>
+#include <tula/eigen.h>
 
 using Eigen::Index;
 using kids::SweepKidsFinder;
@@ -108,10 +110,21 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
     Eigen::VectorXd adiqs(nrfs);      // resampled abs(d21)
     Eigen::VectorXd adiqscov(nrfs);   // resampled abs(d21) coverage
     {
+       bool use_savgol_deriv = config.get_typed<bool>("use_savgol_deriv");
         auto smooth_size =
             static_cast<Index>(config.get_typed<int>("data_smooth_size"));
+        if (use_savgol_deriv) {
+            if (smooth_size < 5) {
+                throw std::runtime_error("smooth size too small for SavGol deriv");
+            }
+            if (smooth_size % 2 == 0) {
+                smooth_size += 1;
+            }
+        }
         auto smooth_i0 = (smooth_size - 1) / 2; // valid index
-        bool pre_smooth = smooth_size > 0;
+        bool pre_smooth = (smooth_size > 0);
+        gram_sg::SavitzkyGolayFilter first_derivative_filter(
+            smooth_i0, 0, 2, 1, sweepstep);
         auto exclude_edge = config.get_typed<double>("resample_exclude_edge");
         auto exclude_edge_size = exclude_edge / sweepstep;
 
@@ -133,19 +146,48 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
         std::mutex m_mutex; // avoid writing to same item in adiqs
         auto toneindices = tula::container_utils::index(ntones);
         grppi::map(ex, toneindices, toneindices, [&](auto c) {
-            // smooth
-            if (pre_smooth) {
+            Eigen::VectorXcd diqs(nsweeps);
+            diqs.setConstant(std::complex(0., 0.));
+            // smooth and deriv
+            if  (use_savgol_deriv) {
+                //  we ensured the smooth size >=5 previously
+                // here we just write the deriv data to diqs
                 tula::alg::convolve1d(
                     data.iqs().col(c),
-                    [&data](const auto &patch) {
-                        return std::complex(tula::alg::median(patch.real()),
-                                            tula::alg::median(patch.imag()));
+                    [&data, &use_savgol_deriv, &first_derivative_filter](const auto &patch) {
+                        // calculate the deriv
+                        auto xx = tula::eigen_utils::to_stdvec(patch.real());
+                        auto yy = tula::eigen_utils::to_stdvec(patch.imag());
+                        double x = first_derivative_filter.filter(xx);
+                        double y = first_derivative_filter.filter(yy);
+                        return std::complex(x, y);
                     },
                     smooth_size,
-                    iqs.col(c).segment(smooth_i0, nsweeps - smooth_size + 1));
+                    diqs.segment(smooth_i0, nsweeps - smooth_size + 1));
+            } else {
+                // do smooth if needed
+                if (pre_smooth) {
+                    tula::alg::convolve1d(
+                        data.iqs().col(c),
+                        [&data, &use_savgol_deriv, &first_derivative_filter](const auto &patch) {
+                            if (use_savgol_deriv) {
+                                // calculate the deriv
+                                auto xx = tula::eigen_utils::to_stdvec(patch.real());
+                                auto yy = tula::eigen_utils::to_stdvec(patch.imag());
+                                double x = first_derivative_filter.filter(xx);
+                                double y = first_derivative_filter.filter(yy);
+                                return std::complex(x, y);
+                            } else {
+                                return std::complex(tula::alg::median(patch.real()),
+                                                tula::alg::median(patch.imag()));
+                            }
+                        },
+                        smooth_size,
+                        iqs.col(c).segment(smooth_i0, nsweeps - smooth_size + 1));
+                }
+                // do deriv
+                tula::alg::gradient(iqs.col(c), data.fs().col(c), diqs);
             }
-            Eigen::VectorXcd diqs(nsweeps);
-            tula::alg::gradient(iqs.col(c), data.fs().col(c), diqs);
             // interpolate onto rfs
             // get the slice of max range in rfs that is enclosed by tonerange.
             auto [il, ir1] = tula::alg::argwithin(rfs, toneranges.coeff(0, c),
