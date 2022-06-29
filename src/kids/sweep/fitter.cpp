@@ -42,9 +42,9 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
         toneranges.resize(2, ntones);
         toneranges.row(0) = data.fs().colwise().minCoeff();
         toneranges.row(1) = data.fs().colwise().maxCoeff();
-        // SPDLOG_TRACE(
-        //     "fit fs{:r0} iqs{:r0} tonespan={:g} sweepspan={:g} sweepstep={:g}",
-        //     data.fs(), data.iqs(), tonespan, sweepspan, sweepstep);
+        SPDLOG_TRACE(
+            "toneranges={} tonespan={:g} sweepspan={:g} sweepstep={:g}",
+            toneranges, tonespan, sweepspan, sweepstep);
         SPDLOG_TRACE("fit iqs{}", data.iqs());
     }
     auto toneindices = tula::container_utils::index(ntones);
@@ -88,7 +88,7 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
     // TODO: make it a config entry?
     // auto large_offset_at_500MHz = 6 * window_width_at_500MHz;
     // double large_offset_at_500MHz = 50e3; // 2x fwhm with Qr=20k
-    double large_offset_at_500MHz = window_width_at_500MHz * 4;
+    double large_offset_at_500MHz = window_width_at_500MHz * 6;
     SPDLOG_DEBUG("use large offset limit {} Hz at 500MHz",
                  large_offset_at_500MHz);
     Eigen::MatrixXcd uncertainty(nsweeps, ntones);
