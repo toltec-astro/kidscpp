@@ -21,6 +21,7 @@ struct SweepKidsFinder {
         std::vector<Eigen::Index> icands_good;
         Eigen::VectorXd iterdata;
         Eigen::VectorXd residual;
+        Eigen::VectorXd adiqsmdl;
         SweepFitResult candsfitresult;
     };
 

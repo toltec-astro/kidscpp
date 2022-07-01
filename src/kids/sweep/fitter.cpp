@@ -3,11 +3,13 @@
 #include <tula/algorithm/ei_ceresfitter.h>
 #include <tula/algorithm/ei_numdiff.h>
 #include <tula/algorithm/ei_stats.h>
+#include <tula/algorithm/ei_convolve.h>
 #include <tula/container.h>
 #include <tula/eigen.h>
 #include <tula/formatter/enum.h>
 #include <tula/grppi.h>
 #include <tula/switch_invoke.h>
+#include <gram_savitzky_golay/gram_savitzky_golay.h>
 
 using Eigen::Index;
 using kids::SweepFitResult;
@@ -30,13 +32,14 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
     const auto &sfs = data.sweeps();
     Index nsweeps{0};
     Index ntones{0};
+    double sweepstep{0};
     Eigen::MatrixXd toneranges;
     {
         std::tie(nsweeps, ntones) = tula::alg::shape(data.iqs());
         assert(nsweeps == data.sweeps().size());
         assert(ntones == data.tones().size());
         [[maybe_unused]] auto sweepspan = tula::alg::span(sfs);
-        [[maybe_unused]] auto sweepstep = tula::alg::step(sfs);
+        sweepstep = tula::alg::step(sfs);
         [[maybe_unused]] auto tonespan = tula::alg::span(data.tones());
 
         toneranges.resize(2, ntones);
@@ -91,6 +94,11 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
     double large_offset_at_500MHz = window_width_at_500MHz * 6;
     SPDLOG_DEBUG("use large offset limit {} Hz at 500MHz",
                  large_offset_at_500MHz);
+    auto lim_Qr_min = config.get_typed<double>("lim_Qr_min");
+    auto lim_Qr_max = config.get_typed<double>("lim_Qr_max");
+    SPDLOG_DEBUG("use Qr lims {} {}", lim_Qr_min, lim_Qr_max);
+    auto lim_gain_min = config.get_typed<double>("lim_gain_min");
+    SPDLOG_DEBUG("use gain min={}", lim_gain_min);
     Eigen::MatrixXcd uncertainty(nsweeps, ntones);
     uncertainty.setConstant(std::complex<double>{1., 1.});
     auto update_uncertainty = [&](auto weight_type_, auto c, auto f_c) {
@@ -110,7 +118,7 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
             return;
         }
         auto x = 2. / window_width * (data.fs().col(c).array() - f_c);
-        // SPDLOG_TRACE("x{}", x);
+        SPDLOG_TRACE("x{}", x);
         if constexpr (weight_type == WeightOption::gauss) {
             uncertainty.col(c).real().array() = (x.square() / 2.).exp();
         } else if constexpr (weight_type == WeightOption::lorentz) {
@@ -122,7 +130,7 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
     using ParamSetting = tula::alg::ceresfit::ParamSetting<double>;
 
     // setup inital parameters for s21
-    double qr = 5e4;
+    double qr = window_Qr;
     double qc = 5e4;
     using S21 = kids::Model<kids::SweepModel::S21Basic>;
     Eigen::MatrixXd s21ps(S21::NP, ntones);
@@ -150,6 +158,8 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
     };
     // create d21 and fit d21 to update s21ps
     Eigen::MatrixXcd diqs(nsweeps, ntones);
+    diqs.setConstant(std::complex(0., 0.));
+
     using D21 = kids::Model<kids::SweepModel::D21>;
     Eigen::MatrixXd d21costs(2, ntones);
     Eigen::MatrixXd d21ps(D21::NP, ntones);
@@ -159,8 +169,67 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
     d21ps.row(2) = s21ps.row(3); // input freqs
     // row 3 an 4 are norm_d21
     // 5 and 6 and const slope in s21
+    
+    // d21 related
+    bool use_savgol_deriv = config.get_typed<bool>("finder_use_savgol_deriv");
+    auto smooth_size = static_cast<Index>(config.get_typed<int>("finder_smooth_size"));
+    if (use_savgol_deriv) {
+        if (smooth_size < 5) {
+            throw std::runtime_error("smooth size too small for SavGol deriv");
+        }
+        if (smooth_size % 2 == 0) {
+            smooth_size += 1;
+        }
+    }
+    auto smooth_i0 = (smooth_size - 1) / 2; // valid index
+    bool pre_smooth = (smooth_size > 0);
+    gram_sg::SavitzkyGolayFilter first_derivative_filter(
+        smooth_i0, 0, 2, 1, sweepstep);
+
     grppi::map(ex, toneindices, toneindices, [&](auto c) {
-        tula::alg::gradient(data.iqs().col(c), data.fs().col(c), diqs.col(c));
+        // tula::alg::gradient(data.iqs().col(c), data.fs().col(c), diqs.col(c));
+            // smooth and deriv
+            if  (use_savgol_deriv) {
+                //  we ensured the smooth size >=5 previously
+                // here we just write the deriv data to diqs
+                tula::alg::convolve1d(
+                    data.iqs().col(c),
+                    [&data, &use_savgol_deriv, &first_derivative_filter](const auto &patch) {
+                        // calculate the deriv
+                        auto xx = tula::eigen_utils::to_stdvec(patch.real());
+                        auto yy = tula::eigen_utils::to_stdvec(patch.imag());
+                        double x = first_derivative_filter.filter(xx);
+                        double y = first_derivative_filter.filter(yy);
+                        return std::complex(x, y);
+                    },
+                    smooth_size,
+                    diqs.col(c).segment(smooth_i0, nsweeps - smooth_size + 1));
+            } else {
+                // do smooth if needed
+                Eigen::VectorXcd iqs(nsweeps);
+                iqs.setConstant(std::complex(0., 0.));
+               if (pre_smooth) {
+                    tula::alg::convolve1d(
+                        data.iqs().col(c),
+                        [&data, &use_savgol_deriv, &first_derivative_filter](const auto &patch) {
+                            if (use_savgol_deriv) {
+                                // calculate the deriv
+                                auto xx = tula::eigen_utils::to_stdvec(patch.real());
+                                auto yy = tula::eigen_utils::to_stdvec(patch.imag());
+                                double x = first_derivative_filter.filter(xx);
+                                double y = first_derivative_filter.filter(yy);
+                                return std::complex(x, y);
+                            } else {
+                                return std::complex(tula::alg::median(patch.real()),
+                                                tula::alg::median(patch.imag()));
+                            }
+                        },
+                        smooth_size,
+                        iqs.segment(smooth_i0, nsweeps - smooth_size + 1));
+                }
+                // do deriv
+                tula::alg::gradient(iqs, data.fs().col(c), diqs.col(c));
+            }
         auto [converged, summary] = tula::alg::ceresfit::fit<D21>(
             data.fs().col(c), diqs.col(c), uncertainty.col(c), d21ps.col(c),
             {{"fp", ParamSetting::getfixed(d21ps.coeff(0, c))}});
@@ -180,6 +249,12 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
         if (std::abs(f - f0) > large_offset) {
             update_flag(Flag::D21LargeOffset, c);
         }
+        // check D21 Qr range
+        auto d21_Qr = d21ps(1, c);
+        if ((d21_Qr < lim_Qr_min) || (d21_Qr > lim_Qr_max)) {
+            update_flag(Flag::D21QrOutOfRange, c);
+        }
+
         return c;
     });
     ModelSpec modelspec{ModelSpec::gainlintrend};
@@ -303,6 +378,16 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
                 auto large_offset = large_offset_at_500MHz * f0 / 5e8;
                 if (std::abs(f - f0) > large_offset) {
                     update_flag(Flag::LargeOffset, c);
+                }
+                // check S21 fitting Qr range
+                auto Qr = ps(1, c);
+                if ((Qr < lim_Qr_min) || (Qr > lim_Qr_max)) {
+                    update_flag(Flag::QrOutOfRange, c);
+                }
+                // check S21 gain
+                auto gain = std::sqrt(ps(5, c) * ps(5, c) + ps(6, c) * ps(6, c));
+                if (gain < lim_gain_min) {
+                    update_flag(Flag::LowGain, c);
                 }
                 return c;
             });

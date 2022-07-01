@@ -7,6 +7,8 @@
 #include <tula/formatter/enum.h>
 #include <tula/nc.h>
 #include <tula/switch_invoke.h>
+#include <tula/algorithm/ei_iterclip.h>
+#include <tula/algorithm/ei_stats.h>
 //#include <tula/nddata/cached_>
 
 using Eigen::Dynamic;
@@ -664,6 +666,17 @@ sweep_data_t IO<DataFormat::NcFile>::sweep_data_evaluator::evaluate(
         auto i = std::vector<std::size_t>{TULA_SIZET(i0), 0};
         auto s =
             std::vector<std::size_t>{TULA_SIZET(ntimes), TULA_SIZET(ntones)};
+        
+        double reduce_clip_sigma = 2;
+        int reduce_clip_maxiter = 5;
+         auto iterclip = tula::alg::iterclip(
+                    // use median-MAD for robust statistics
+                    [](const auto &v) { return tula::alg::nanmedmad(v); },
+                    // the snr cut, we only cut the positive side
+                    [n = reduce_clip_sigma](const auto &v, const auto &c,
+                                           const auto &s) { return (v <= c + n * s) && (v >= c - n * s); },
+                    reduce_clip_maxiter);
+
         auto read = [&](const auto &key) {
             const auto &v_data = nc.var(key);
             RMatrixXd data(ntimes, ntones);
@@ -675,6 +688,17 @@ sweep_data_t IO<DataFormat::NcFile>::sweep_data_evaluator::evaluate(
                 auto [s, e] = sweep_reducer_segment.at(TULA_SIZET(i));
                 data.row(i) =
                     data.block(s - i0, 0, e - s, ntones).colwise().mean();
+                // iter clip the data
+                /*
+                for (Index j = 0; j < ntones; ++j) {
+                    std::tie(
+                        std::ignore,
+                         std::ignore,
+                         data.coeffRef(i, j),
+                         std::ignore) = iterclip(
+                        data.col(j).segment(s-i0, e - s));
+                }
+                */
             }
             data.conservativeResize(nsweepsteps, ntones);
             return data;

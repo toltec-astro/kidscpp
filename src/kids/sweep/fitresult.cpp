@@ -4,9 +4,12 @@
 #include <tula/algorithm/ei_stats.h>
 #include <tula/datatable.h>
 #include <tula/filename.h>
-// #include <tula/matplotlibcpp.h>
 #include <tula/nc.h>
 #include <yaml-cpp/yaml.h>
+#ifdef WITH_PLOTTING
+#include <matplotlibcpp.h>
+#endif
+
 
 void kids::SweepFitResult::save(const std::string &filepath_) const {
     auto _0 = tula::logging::scoped_timeit("save result");
@@ -180,8 +183,8 @@ void kids::SweepFitResult::save_processed(const std::string &filepath_) const {
 }
 
 void kids::SweepFitResult::plot() const {
-    /*
-    namespace eiu = eigen_utils;
+    #ifdef WITH_PLOTTING
+    namespace eiu = tula::eigen_utils;
     namespace plt = matplotlibcpp;
     using Eigen::Index;
 
@@ -195,18 +198,18 @@ void kids::SweepFitResult::plot() const {
 
     // setup canvas
     auto source = data.meta.get_str("source");
-    SPDLOG_TRACE("generate plot for {}", source);
+    SPDLOG_DEBUG("generate plot for {}", source);
     // auto lofreq = sweepdata.emta.get<double>("lofreq");
     std::string funit = "Hz";
     std::string iqunit = "DN";
-
     plt::close(); // flush
 
     Index ntonesperpage = 6;
     Index npanels = 8;
     auto npages = ntones / ntonesperpage + 1;
+
     for (Index ipage = 0; ipage < npages; ++ipage) {
-        plt::figure_size(400 * SIZET(npanels), 200 * SIZET(ntonesperpage));
+        plt::figure_size(200 * TULA_SIZET(npanels), 200 * TULA_SIZET(ntonesperpage));
         plt::suptitle(fmt::format("{} [{}:{}]", source, ipage * ntonesperpage,
                                   (ipage + 1) * ntonesperpage));
         for (Index itone_ = 0; itone_ < ntonesperpage; ++itone_) {
@@ -215,16 +218,16 @@ void kids::SweepFitResult::plot() const {
                 break;
             }
             // sweep data
-            auto xvec = eiu::tostd(data.fs().col(itone));
-            auto ivec = eiu::tostd(data.iqs().col(itone).real());
-            auto qvec = eiu::tostd(data.iqs().col(itone).imag());
+            auto xvec = eiu::to_stdvec(data.fs().col(itone));
+            auto ivec = eiu::to_stdvec(data.iqs().col(itone).real());
+            auto qvec = eiu::to_stdvec(data.iqs().col(itone).imag());
             auto wivec =
-                eiu::tostd(1. / uncertainty.col(itone).array().real().square());
+                eiu::to_stdvec(1. / uncertainty.col(itone).array().real().square());
             auto wqvec =
-                eiu::tostd(1. / uncertainty.col(itone).array().imag().square());
-            auto avec = eiu::tostd(data.iqs().col(itone).array().abs().log10());
-            auto pvec = eiu::tostd(data.iqs().col(itone).array().arg());
-            auto advec = eiu::tostd(diqs.col(itone).array().abs());
+                eiu::to_stdvec(1. / uncertainty.col(itone).array().imag().square());
+            auto avec = eiu::to_stdvec(data.iqs().col(itone).array().abs().log10());
+            auto pvec = eiu::to_stdvec(data.iqs().col(itone).array().arg());
+            auto advec = eiu::to_stdvec(diqs.col(itone).array().abs());
             auto fix_phase = [](auto &&m) {
                 auto pi = 4. * std::atan(1);
                 if ((m.maxCoeff() - m.minCoeff()) > 1.5 * pi) {
@@ -236,7 +239,7 @@ void kids::SweepFitResult::plot() const {
                     }
                 }
             };
-            fix_phase(eiu::asvec(pvec));
+            fix_phase(eiu::as_eigen(pvec));
             // other outputs
             auto fout = output(itone, 0);
             auto fin = output(itone, 1);
@@ -245,7 +248,7 @@ void kids::SweepFitResult::plot() const {
             // model
             std::vector<double> imdl, qmdl, amdl, pmdl, admdl;
             auto dispatch_model = [&](auto model_) {
-                constexpr auto model_v = DECAY(model_)::value;
+                constexpr auto model_v = TULA_DECAY(model_)::value;
                 using Model = kids::Model<model_v>;
                 // SPDLOG_DEBUG("plot with model: {}", model_v);
                 Eigen::VectorXcd iqmdl(nsweeps);
@@ -256,22 +259,22 @@ void kids::SweepFitResult::plot() const {
                 //                 tula::alg::ceresfit::eval<Model>(eiu::asvec(xvec),
                 //                 params, iqmdl);
 
-                tula::alg::ceresfit::eval<Model>(eiu::asvec(xvec), ps.col(itone),
+                tula::alg::ceresfit::eval<Model>(eiu::as_eigen(xvec), ps.col(itone),
                                            iqmdl);
                 SPDLOG_TRACE("[{}] s21 fit: {} -> {}", itone, costs(0, itone),
                              costs(1, itone));
-                imdl = eiu::tostd(iqmdl.real());
-                qmdl = eiu::tostd(iqmdl.imag());
-                amdl = eiu::tostd(iqmdl.array().abs().log10());
-                pmdl = eiu::tostd(iqmdl.array().arg());
-                fix_phase(eiu::asvec(pmdl));
+                imdl = eiu::to_stdvec(iqmdl.real());
+                qmdl = eiu::to_stdvec(iqmdl.imag());
+                amdl = eiu::to_stdvec(iqmdl.array().abs().log10());
+                pmdl = eiu::to_stdvec(iqmdl.array().arg());
+                fix_phase(eiu::as_eigen(pmdl));
                 // d21 mdl
                 Eigen::VectorXcd diqmdl(nsweeps);
                 tula::alg::ceresfit::eval<kids::Model<kids::SweepModel::D21>>(
-                    eiu::asvec(xvec), d21ps.col(itone), diqmdl);
+                    eiu::as_eigen(xvec), d21ps.col(itone), diqmdl);
                 SPDLOG_TRACE("[{}] d21 fit: {} -> {}", itone,
                              d21costs(0, itone), d21costs(1, itone));
-                admdl = eiu::tostd(diqmdl.array().abs());
+                admdl = eiu::to_stdvec(diqmdl.array().abs());
                 SPDLOG_TRACE("[{}] fitresult flag: {:l}", itone,
                              static_cast<SweepFitResult::Flag>(int(flag)));
 
@@ -292,18 +295,21 @@ void kids::SweepFitResult::plot() const {
                     {"markersize", "6"}, {"color", "C2"}, {"marker", "x"}};
                 auto plot0 = [](const auto &x, const auto &y, const auto &style,
                                 const auto &style0) {
+                    // SPDLOG_TRACE("plot x{} y{}", x, y);
+                    // plt::plot(std::vector<double>{0, 1}, std::vector<double>{0, 1}, style);
                     plt::plot(x, y, style);
                     plt::plot({x[0]}, {y[0]}, style0);
+                    SPDLOG_TRACE("plot x0={} y0={}", x[0], y[0]);
                 };
                 auto plotf = [&]() {
-                    plt::axvline(fin,
+                    plt::axvline(fin, 0., 1.,
                                  {{"color", "#c3c3c3"}, {"linestyle", "--"}});
-                    plt::axvline(fout, {{"color", "r"}});
+                    plt::axvline(fout, 0., 1., {{"color", "r"}});
                     plt::axvline(data.tones().coeff(itone) -
-                                     fin / window_Qr / 2.,
+                                     fin / window_Qr / 2., 0., .1,
                                  {{"color", "#e3e3e3"}, {"linestyle", ":"}});
                     plt::axvline(data.tones().coeff(itone) +
-                                     fin / window_Qr / 2.,
+                                     fin / window_Qr / 2., 0., 1.,
                                  {{"color", "#e3e3e3"}, {"linestyle", ":"}});
                 };
                 // panel 1: Ampl
@@ -318,7 +324,7 @@ void kids::SweepFitResult::plot() const {
                 plot0(xvec, advec, vecstyle, vec0style);
                 plot0(xvec, admdl, mdlstyle, mdl0style);
                 plot0(xvec,
-                      eiu::tostd(
+                      eiu::to_stdvec(
                           (diqs.col(itone).array() - diqmdl.array()).abs()),
                       resstyle, res0style);
                 plotf();
@@ -351,36 +357,36 @@ void kids::SweepFitResult::plot() const {
                 plot0(ivec, qvec, vecstyle, vec0style);
                 plot0(imdl, qmdl, mdlstyle, mdl0style);
                 // get ifout and ifin
-                auto ifin = tula::alg::argmin((eiu::asvec(xvec).array() - fin).abs());
+                auto ifin = tula::alg::argmin((eiu::as_eigen(xvec).array() - fin).abs());
                 auto ifout =
-                    tula::alg::argmin((eiu::asvec(xvec).array() - fout).abs());
-                plt::plot({ivec[SIZET(ifin)]}, {qvec[SIZET(ifin)]},
+                    tula::alg::argmin((eiu::as_eigen(xvec).array() - fout).abs());
+                plt::plot({ivec[TULA_SIZET(ifin)]}, {qvec[TULA_SIZET(ifin)]},
                           {{"color", "#d3d3d3"},
                            {"marker", "o"},
                            {"markersize", "6"}});
                 plt::plot(
-                    {ivec[SIZET(ifout)]}, {qvec[SIZET(ifout)]},
+                    {ivec[TULA_SIZET(ifout)]}, {qvec[TULA_SIZET(ifout)]},
                     {{"color", "r"}, {"marker", "o"}, {"markersize", "6"}});
             };
             using ModelSpec = SweepFitter::ModelSpec;
             switch (this->modelspec) {
             case ModelSpec::gain: {
-                dispatch_model(meta::scalar_t<kids::SweepModel::S21WithGain>{});
+                dispatch_model(tula::meta::scalar_t<kids::SweepModel::S21WithGain>{});
                 break;
             }
             case ModelSpec::gainlintrend: {
                 dispatch_model(
-                    meta::scalar_t<kids::SweepModel::S21WithGainLinTrend>{});
+                    tula::meta::scalar_t<kids::SweepModel::S21WithGainLinTrend>{});
                 break;
             }
             case ModelSpec::trans: {
                 dispatch_model(
-                    meta::scalar_t<kids::SweepModel::S21WithTrans>{});
+                    tula::meta::scalar_t<kids::SweepModel::S21WithTrans>{});
                 break;
             }
             case ModelSpec::translintrend: {
                 dispatch_model(
-                    meta::scalar_t<kids::SweepModel::S21WithTransLinTrend>{});
+                    tula::meta::scalar_t<kids::SweepModel::S21WithTransLinTrend>{});
                 break;
             }
             }
@@ -388,7 +394,8 @@ void kids::SweepFitResult::plot() const {
         plt::xlabel(fmt::format("Freqency ({})", funit));
         plt::show();
     }
-        */
+    // plt::detail::_interpreter::kill();
+    #endif
 }
 
 //

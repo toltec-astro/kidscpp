@@ -375,8 +375,11 @@ void SweepKidsFinderResult::plot() const {
     };
     // plot each iter as one panel
     // upper two panel: plot iqs and adiqs
-    auto niter = static_cast<Index>(itersteps.size());
-    const auto iter0 = niter - 3;
+    // auto niter = static_cast<Index>(itersteps.size());
+    // const auto iter0 = niter - 3;
+    // const auto iter0 = 0;
+    const auto iter0 = 0;
+    const auto niter = 3;
     auto npanels = 2 + niter - iter0;
     {
         plt::subplot(npanels, 1, 1);
@@ -415,7 +418,7 @@ void SweepKidsFinderResult::plot() const {
         // plot residual
         const auto &residual = itersteps.back().residual;
         plt::plot(rfsvec, eiu::to_stdvec(residual), resstyle);
-        plt::ylim(-0.1, adiqsstd.maxCoeff() * 10);
+        plt::ylim(-0.1, adiqsstd.maxCoeff() * 10 + adiqsmean.maxCoeff());
         for (auto u : unique_candidates) {
             auto [i, t, c] = u;
             plt::axvline(itersteps[TULA_SIZET(t)].candsfitresult.output.coeff(c, 0),
@@ -440,6 +443,7 @@ void SweepKidsFinderResult::plot() const {
                       cutstyle);
             plt::plot(rfsvec, adiqsvec, vecstyle);
             plt::plot(rfsvec, eiu::to_stdvec(it.residual), resstyle);
+            plt::plot(rfsvec, eiu::to_stdvec(it.adiqsmdl), resstyle);
             std::map<std::string, std::string> segstyle{seg0style};
             // per segment coloring
             for (std::size_t j = 0; j < it.segments.size(); ++j) {

@@ -38,6 +38,7 @@ struct finder_options {
         r(p("finder_stats_clip_sigma"   ), "N sigmas to clip for compute stddev",
                                      3., doub()),
         r(p("finder_use_savgol_deriv"), "Use SavGol deriv."),
+        r(p("finder_plot_fit"), "Plot fit result when --plot is set."),
         r(p("output_d21"          ), "Save the computed D21",
                                      "{stem}{suffix}.{ext}", opt_str("dest")),
         r(p("output_processed"    ), "Save the reduced data",
@@ -51,11 +52,16 @@ struct finder_options {
                  {"output_d21", "output_d21"},
                  {"detect_min_thresh", "finder_threshold"},
                  {"resample", "finder_resample"},
-                 {"data_smooth_size", "finder_smooth_size"},
                  {"stats_clip_sigma", "finder_stats_clip_sigma"},
+                 {"data_smooth_size", "finder_smooth_size"},
                  {"use_savgol_deriv", "finder_use_savgol_deriv"},
                  {"fitter_weight_window_type", "fitter_weight_window_type"},
                  {"fitter_weight_window_Qr", "fitter_weight_window_Qr"},
+                 {"fitter_lim_Qr_min", "fitter_lim_Qr_min"},
+                 {"fitter_lim_Qr_max", "fitter_lim_Qr_max"},
+                 {"fitter_lim_gain_min", "fitter_lim_gain_min"},
+                 {"plot_fit", "finder_plot_fit"},
+                 //
                  // {"fitter_weight_window_fwhm", "fitter_weight_window_fwhm"},
                  {"exmode", "grppiex"}}) {
             if (rc.is_set(rckey)) {
@@ -83,7 +89,13 @@ struct fitter_options {
         //                               1.5e4, doub()),
         r(p("fitter_weight_window_Qr"  ), "The Qr of the detectors to compute weight window",
                                          2e4, doub()),
-        r(p("fitter_modelspec"         ), "The spec of S21 model to use",
+        r(p("fitter_lim_Qr_min"  ), "The min Qr",
+                                         500., doub()),
+        r(p("fitter_lim_Qr_max"  ), "The max Qr",
+                                         50000., doub()),
+        r(p("fitter_lim_gain_min"  ), "The min gain",
+                                         1., doub()),
+       r(p("fitter_modelspec"         ), "The spec of S21 model to use",
                                          Fitter::ModelSpec::gainlintrend,
                                          list(Fitter::ModelSpec{})),
         r(p("output_processed"        ), "Save the reduced data",
@@ -97,7 +109,12 @@ struct fitter_options {
                       {"weight_window_type", "fitter_weight_window_type"},
                       // {"weight_window_fwhm", "fitter_weight_window_fwhm"},
                       {"weight_window_Qr", "fitter_weight_window_Qr"},
+                      {"lim_Qr_min", "fitter_lim_Qr_min"},
+                      {"lim_Qr_max", "fitter_lim_Qr_max"},
+                      {"lim_gain_min", "fitter_lim_gain_min"},
                       {"modelspec", "fitter_modelspec"},
+                     {"finder_smooth_size", "finder_smooth_size"},
+                     {"finder_use_savgol_deriv", "finder_use_savgol_deriv"},
                       {"exmode", "grppiex"}}) {
             if (rc.is_set(rckey)) {
                 conf.set(confkey, rc.at(rckey));

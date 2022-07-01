@@ -46,14 +46,15 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
     config.set("detect_min_segment_size", 20);
     // s21 fit
     // this is the size of the s21 data for fitting per detector
-    config.set("fit_width", 150e3);
+    // config.set("fit_width", 150e3);
     config.set("eval_n_fwhms", 6);
     constexpr auto fit_modelspec = SweepFitter::ModelSpec::gainlintrend;
     config.set("fitter_modelspec",
                std::string(tula::enum_utils::name(fit_modelspec)));
     // deblend
+    auto fitter_weight_window_Qr = config.get_typed<double>("fitter_weight_window_Qr");
     config.set("deblend_tone_dist",
-               8000.); // tones that are closer than this is merged
+               8000. * 1.5e4 / fitter_weight_window_Qr); // tones that are closer than this is merged
 
     config.update(config_);
 
@@ -98,97 +99,96 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
         double rfmin = vmin.value_or(toneranges.row(0).minCoeff());
         double rfmax = vmax.value_or(toneranges.row(1).maxCoeff());
         // compute sweep coverage
-        rfstep = step.value_or(sweepstep / coverage);
+        rfstep = step.value_or(sweepstep);
         SPDLOG_TRACE("resample grid [{}:{}:{}]", rfmin, rfmax, rfstep);
         rfs = tula::alg::arange(rfmin, rfmax, rfstep);
         nrfs = rfs.size();
         SPDLOG_TRACE("resampled fs{}", rfs);
     }
-    // make unified adiqs
-    Eigen::MatrixXcd iqs(data.iqs()); // make a copy of the iqs data in case
-                                      // we need to smooth
+    bool use_savgol_deriv = config.get_typed<bool>("use_savgol_deriv");
+    auto smooth_size =
+        static_cast<Index>(config.get_typed<int>("data_smooth_size"));
+    // fix smooth size if not odd
+    if (use_savgol_deriv) {
+        if (smooth_size < 5) {
+            throw std::runtime_error("smooth size too small for SavGol deriv");
+        }
+        if (smooth_size % 2 == 0) {
+            smooth_size += 1;
+        }
+    }
+    auto smooth_i0 = (smooth_size - 1) / 2; // valid index
+    bool pre_smooth = (smooth_size > 0);
+    gram_sg::SavitzkyGolayFilter first_derivative_filter(
+            smooth_i0, 0, 2, 1, sweepstep);
+    // fix exclude edge to smooth size
+    auto exclude_edge = config.get_typed<double>("resample_exclude_edge");
+    auto exclude_edge_size = exclude_edge / sweepstep;
+
+    if (pre_smooth) {
+        auto smooth_i1 = smooth_size - smooth_i0;
+        SPDLOG_TRACE("preprocess data with smooth_size={}", smooth_size);
+        if (exclude_edge_size < smooth_i1) {
+            exclude_edge_size = smooth_i1; //
+            SPDLOG_DEBUG("set exclude_edge_size={} to match with "
+                         "smooth_size {} ({})",
+                         exclude_edge, smooth_size, smooth_i1);
+        }
+    }
+    SPDLOG_TRACE("resample exclude_edge_size={}", exclude_edge_size);
+
+    auto make_diqs = [&use_savgol_deriv, &first_derivative_filter, &smooth_i0, &smooth_size, &pre_smooth] (const auto& fs, const auto& iqs, auto iqs_s_ref, auto diqs_ref) {
+        iqs_s_ref = iqs;
+        if  (use_savgol_deriv) {
+            //  we ensured the smooth size >=5 previously
+            // here we just write the deriv data to diqs
+            tula::alg::convolve1d(
+                iqs,
+                [&use_savgol_deriv, &first_derivative_filter](const auto &patch) {
+                    // calculate the deriv
+                    auto xx = tula::eigen_utils::to_stdvec(patch.real());
+                    auto yy = tula::eigen_utils::to_stdvec(patch.imag());
+                    double x = first_derivative_filter.filter(xx);
+                    double y = first_derivative_filter.filter(yy);
+                    return std::complex(x, y);
+                },
+                smooth_size,
+                diqs_ref.segment(smooth_i0, fs.size() - smooth_size + 1)
+                );
+        } else {
+            // use gradient
+            // do median smooth if needed
+            if (pre_smooth) {
+                tula::alg::convolve1d(
+                    iqs,
+                    [](const auto &patch) {
+                            return std::complex(tula::alg::median(patch.real()),
+                                            tula::alg::median(patch.imag()));
+                    },
+                    smooth_size,
+                    // save the smoothed in iqs_s
+                    iqs_s_ref.segment(smooth_i0, fs.size() - smooth_size + 1));
+            }
+            // do deriv
+            tula::alg::gradient(iqs_s_ref, fs, diqs_ref);
+        }
+
+    };
+   // make unified adiqs
     Eigen::VectorXd adiqs(nrfs);      // resampled abs(d21)
     Eigen::VectorXd adiqscov(nrfs);   // resampled abs(d21) coverage
+    Eigen::MatrixXcd iqs_s(data.iqs());  // smoothed iqs
+    Eigen::MatrixXcd diqs(nsweeps, ntones);  // diqs
+    diqs.setConstant(std::complex(0., 0.));
+    adiqs.setConstant(0.);
+    adiqscov.setConstant(0.);
     {
-       bool use_savgol_deriv = config.get_typed<bool>("use_savgol_deriv");
-        auto smooth_size =
-            static_cast<Index>(config.get_typed<int>("data_smooth_size"));
-        if (use_savgol_deriv) {
-            if (smooth_size < 5) {
-                throw std::runtime_error("smooth size too small for SavGol deriv");
-            }
-            if (smooth_size % 2 == 0) {
-                smooth_size += 1;
-            }
-        }
-        auto smooth_i0 = (smooth_size - 1) / 2; // valid index
-        bool pre_smooth = (smooth_size > 0);
-        gram_sg::SavitzkyGolayFilter first_derivative_filter(
-            smooth_i0, 0, 2, 1, sweepstep);
-        auto exclude_edge = config.get_typed<double>("resample_exclude_edge");
-        auto exclude_edge_size = exclude_edge / sweepstep;
-
-        if (pre_smooth) {
-            auto smooth_i1 = smooth_size - smooth_i0;
-            SPDLOG_TRACE("preprocess data with smooth_size={}", smooth_size);
-            if (exclude_edge_size < smooth_i1) {
-                exclude_edge_size = smooth_i1; //
-                SPDLOG_DEBUG("set exclude_edge_size={} to match with "
-                             "smooth_size {} ({})",
-                             exclude_edge, smooth_size, smooth_i1);
-            }
-        }
-        SPDLOG_TRACE("resample exclude_edge_size={}", exclude_edge_size);
-
-        adiqs.setConstant(0.);
-        adiqscov.setConstant(0.);
 
         std::mutex m_mutex; // avoid writing to same item in adiqs
         auto toneindices = tula::container_utils::index(ntones);
         grppi::map(ex, toneindices, toneindices, [&](auto c) {
-            Eigen::VectorXcd diqs(nsweeps);
-            diqs.setConstant(std::complex(0., 0.));
-            // smooth and deriv
-            if  (use_savgol_deriv) {
-                //  we ensured the smooth size >=5 previously
-                // here we just write the deriv data to diqs
-                tula::alg::convolve1d(
-                    data.iqs().col(c),
-                    [&data, &use_savgol_deriv, &first_derivative_filter](const auto &patch) {
-                        // calculate the deriv
-                        auto xx = tula::eigen_utils::to_stdvec(patch.real());
-                        auto yy = tula::eigen_utils::to_stdvec(patch.imag());
-                        double x = first_derivative_filter.filter(xx);
-                        double y = first_derivative_filter.filter(yy);
-                        return std::complex(x, y);
-                    },
-                    smooth_size,
-                    diqs.segment(smooth_i0, nsweeps - smooth_size + 1));
-            } else {
-                // do smooth if needed
-                if (pre_smooth) {
-                    tula::alg::convolve1d(
-                        data.iqs().col(c),
-                        [&data, &use_savgol_deriv, &first_derivative_filter](const auto &patch) {
-                            if (use_savgol_deriv) {
-                                // calculate the deriv
-                                auto xx = tula::eigen_utils::to_stdvec(patch.real());
-                                auto yy = tula::eigen_utils::to_stdvec(patch.imag());
-                                double x = first_derivative_filter.filter(xx);
-                                double y = first_derivative_filter.filter(yy);
-                                return std::complex(x, y);
-                            } else {
-                                return std::complex(tula::alg::median(patch.real()),
-                                                tula::alg::median(patch.imag()));
-                            }
-                        },
-                        smooth_size,
-                        iqs.col(c).segment(smooth_i0, nsweeps - smooth_size + 1));
-                }
-                // do deriv
-                tula::alg::gradient(iqs.col(c), data.fs().col(c), diqs);
-            }
-            // interpolate onto rfs
+            make_diqs(data.fs().col(c), data.iqs().col(c), iqs_s.col(c), diqs.col(c));
+            // interpolate diqs onto rfs
             // get the slice of max range in rfs that is enclosed by tonerange.
             auto [il, ir1] = tula::alg::argwithin(rfs, toneranges.coeff(0, c),
                                             toneranges.coeff(1, c));
@@ -199,7 +199,7 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
             // interpolate
             SPDLOG_TRACE("interpolate tone {} on [{}:{}] ({})", c, il, ir1, ni);
             Eigen::VectorXd c_adiqs =
-                tula::alg::interp(data.fs().col(c), diqs.array().abs().eval(),
+                tula::alg::interp(data.fs().col(c), diqs.col(c).array().abs().eval(),
                             rfs.segment(il, ni));
             {
                 // need this to avoid data racing
@@ -238,7 +238,7 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
     Eigen::VectorXd adiqsmean;
     Eigen::VectorXd adiqsstd;
     Eigen::VectorXd adiqs_fcor =
-        rfs.coeff(0) / rfs.array(); // account for the 1/f trend in D21 height
+        (rfs.coeff(0) / rfs.array()).pow(2); // account for the 1/f trend in D21 height
     std::atomic<double> adiqsmax{0.};
     double adiqsmean0{0.};
     double adiqsstd0{0.};
@@ -310,8 +310,9 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
         static_cast<Index>(config.get_typed<int>("detect_min_segment_size"));
     auto deblend_tone_dist = config.get_typed<double>("deblend_tone_dist");
 
-    auto fit_size = Index(config.get_typed<double>("fit_width") / rfstep);
-    SPDLOG_TRACE("s21 fit_size={}", fit_size);
+    // auto fit_size = Index(config.get_typed<double>("fit_width") / rfstep);
+    auto fit_size = int(3 * 5e8 / config.get_typed<double>("fitter_weight_window_Qr") / rfstep);
+    SPDLOG_DEBUG("s21 fit_size={}", fit_size);
     using Flag = SweepFitResult::Flag;
     auto fitter = SweepFitter(Config{
         {"exmode", config.get_str("exmode")},
@@ -321,6 +322,15 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
         //  config.get_typed<double>("fitter_weight_window_fwhm")},
         {"weight_window_Qr",
          config.get_typed<double>("fitter_weight_window_Qr")},
+        {"lim_Qr_min",
+         config.get_typed<double>("fitter_lim_Qr_min")},
+        {"lim_Qr_max",
+         config.get_typed<double>("fitter_lim_Qr_max")},
+        {"lim_gain_min",
+         config.get_typed<double>("fitter_lim_gain_min")},
+
+        {"finder_smooth_size",config.get_typed<int>("data_smooth_size")},
+        {"finder_use_savgol_deriv",config.get_typed<bool>("use_savgol_deriv")},
         {"modelspec", config.get_str("fitter_modelspec")}});
 
     // this function takes the fitresult and return a list of robust entries
@@ -511,17 +521,18 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
             // populate iqs, here we need to interpolate the iqs to
             // cdata fs
             candsdata.iqs().col(c).real() =
-                tula::alg::interp(data.fs().col(itone), iqs.col(itone).real().eval(),
+                tula::alg::interp(data.fs().col(itone), iqs_s.col(itone).real().eval(),
                             candsdata.fs().col(c));
             candsdata.iqs().col(c).imag() =
-                tula::alg::interp(data.fs().col(itone), iqs.col(itone).imag().eval(),
+                tula::alg::interp(data.fs().col(itone), iqs_s.col(itone).imag().eval(),
                             candsdata.fs().col(c));
             return c;
         });
         // do the fit
         auto candsfitresult = fitter(candsdata);
-        // candsfitresult.plot();
-
+        if (config.get_typed<bool>("plot_fit")) {
+            candsfitresult.plot();
+        }
         // subtract the model and get the residual for next iteration
         Eigen::VectorXd residual(iterdata);
         // we force the slope term to zero in order to perserve the d21
@@ -559,9 +570,29 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
             Eigen::VectorXcd iqsmdl(eval_size);
             tula::alg::ceresfit::eval<SweepFitter::model_t<fit_modelspec>>(
                 fsmdl, s21ps.col(c), iqsmdl);
+            Eigen::VectorXcd iqsmdl_s(eval_size);
             Eigen::VectorXcd diqsmdl(eval_size);
+            // here to get adiqsmdl we'll need to do the same filtering
+            // make_diqs(fsmdl, iqsmdl, iqsmdl_s.segment(0, eval_size), diqsmdl.segment(0, eval_size));
             tula::alg::gradient(iqsmdl, fsmdl, diqsmdl);
-            adiqsmdl.segment(il, eval_size).array() += diqsmdl.array().abs();
+            // convolve with smooth size to match D21
+            Eigen::VectorXd adiqsmdl_s(eval_size);
+            adiqsmdl_s.setConstant(0.);
+            Eigen::VectorXd adiqsmdl_ = diqsmdl.array().abs();
+
+            auto ss = int(smooth_size * 2 * std::sqrt(2.));
+            if (ss % 2 == 0) {
+                ss += 1;
+            }
+            auto ss_i0 = (ss - 1) / 2;
+            tula::alg::convolve1d(
+                    adiqsmdl_,
+                    [](const auto &patch) {
+                            return tula::alg::mean(patch);
+                    },
+                    ss,
+                    adiqsmdl_s.segment(ss_i0, eval_size - ss + 1));
+            adiqsmdl.segment(il, eval_size) += adiqsmdl_s;
         }
         // subtract from original
         residual -= adiqsmdl;
@@ -582,6 +613,7 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
                         std::move(icands_good),
                         std::move(iterdata_in),
                         iterdata,
+                        std::move(adiqsmdl),
                         std::move(candsfitresult)};
     };
 
@@ -600,9 +632,9 @@ auto SweepKidsFinder::operator()(const VnaSweepData &data,
         return thresh;
     };
     const auto iter_accept_flag =
-        Flag::D21LargeOffset | Flag::D21NotConverged; // | Flag::LargeOffset
+        Flag::D21LargeOffset | Flag::D21NotConverged | Flag::D21QrOutOfRange | Flag::D21OutOfRange | Flag::D21FitsBetter; // | Flag::LargeOffset
     const auto iter_accept_flag_last =
-        Flag::D21LargeOffset | Flag::D21NotConverged; //  | Flag::LargeOffset;
+        Flag::D21LargeOffset | Flag::D21NotConverged | Flag::D21QrOutOfRange | Flag::D21OutOfRange | Flag::D21FitsBetter; //  | Flag::LargeOffset;
 
     auto ntones_design = data.meta.get_typed<int>("ntones_design");
     auto ntones_max = data.meta.get_typed<int>("ntones_max");

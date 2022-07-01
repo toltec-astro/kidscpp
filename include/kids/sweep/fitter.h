@@ -66,9 +66,12 @@ struct SweepFitResult {
               D21LargeOffset  = 1 << 1,
               D21NotConverged = 1 << 2,
               D21OutOfRange   = 1 << 3,
-              LargeOffset     = 1 << 4,
-              NotConverged    = 1 << 5,
-              OutOfRange      = 1 << 6
+              D21QrOutOfRange = 1 << 4,
+              LargeOffset     = 1 << 5,
+              NotConverged    = 1 << 6,
+              OutOfRange      = 1 << 7,
+              QrOutOfRange    = 1 << 8,
+              LowGain         = 1 << 9
             );
     // clang-format on
     SweepFitter::TargetSweepData data{};
