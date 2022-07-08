@@ -7,6 +7,7 @@
 #include "tula/filename.h"
 #include <tula/cli.h>
 #include <tula/algorithm/ei_stats.h>
+#include <tula/algorithm/ei_iterclip.h>
 #include <tula/config/flatconfig.h>
 #include <tula/formatter/container.h>
 #include <tula/grppi.h>
@@ -481,13 +482,14 @@ int run_cmdproc(const config_t &rc) {
                         // run pre-fit without weight window to derive intial shift
                         SPDLOG_INFO("run prefit with config to get global shift"); 
                         auto result = timeit(
-                            "prefit", fitter, data, fs_init,
-                            config_t{{"weight_window_type", {"none"}}});
+                            "prefit", fitter, data, fs_init
+                            //, config_t{{"weight_window_type", {"none"}}}
+                            );
                         // calcuate global shift
+                        auto fin = data.tones();
+                        auto ntones = fin.size();
                         auto fout = result.output.col(0);
-                        auto fin = result.output.col(1);
                         auto flag_ = result.output.col(2);
-                        auto ntones = result.output.rows();
                         std::vector<double> f_shifts;
                         using Flag = kids::SweepFitResult::Flag;
                         const auto accept_flag =
@@ -498,9 +500,22 @@ int run_cmdproc(const config_t &rc) {
                                 f_shifts.push_back(fout.coeff(i) - fin.coeff(i));
                             }
                         }
+                        auto iterclip = tula::alg::iterclip(
+                            // use median-MAD for robust statistics
+                            [](const auto &v) { return tula::alg::nanmedmad(v); },
+                            [n = 5](const auto &v, const auto &c,
+                                                       const auto &s) { return (v <= c + n * s) && (v >= c - n * s); },
+                            5);
                         double f_shift{0.};
                         if (!f_shifts.empty()) {
-                            f_shift  = tula::alg::median(tula::eigen_utils::as_eigen(f_shifts));
+                            auto [s, c, center, std]  = iterclip(tula::eigen_utils::as_eigen(f_shifts));
+                            SPDLOG_DEBUG("iterclip f_shifts converged={} center={} std={}", c, center, std);
+                            if (!c) {
+                                SPDLOG_INFO("f_shifts iterclip not converged, set global shift to 0.");
+                                f_shift = 0.;
+                            } else {
+                                f_shift = center;
+                            }
                         }
                         fs_init = eiu::to_stdvec(fin.array() + f_shift);
                         SPDLOG_INFO("apply global shift={} computed from n_tones={} to initial fs: {}", f_shift, f_shifts.size(), fs_init);

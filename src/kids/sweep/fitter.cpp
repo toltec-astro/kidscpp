@@ -185,12 +185,12 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
         if (smooth_size % 2 == 0) {
             smooth_size += 1;
         }
+        SPDLOG_DEBUG("use savgol deriv smooth_size={}", smooth_size);
     }
     auto smooth_i0 = (smooth_size - 1) / 2; // valid index
     bool pre_smooth = (smooth_size > 0);
     gram_sg::SavitzkyGolayFilter first_derivative_filter(
         smooth_i0, 0, 2, 1, sweepstep);
-
     grppi::map(ex, toneindices, toneindices, [&](auto c) {
         // tula::alg::gradient(data.iqs().col(c), data.fs().col(c), diqs.col(c));
             // smooth and deriv
@@ -217,20 +217,14 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
                     tula::alg::convolve1d(
                         data.iqs().col(c),
                         [&data, &use_savgol_deriv, &first_derivative_filter](const auto &patch) {
-                            if (use_savgol_deriv) {
-                                // calculate the deriv
-                                auto xx = tula::eigen_utils::to_stdvec(patch.real());
-                                auto yy = tula::eigen_utils::to_stdvec(patch.imag());
-                                double x = first_derivative_filter.filter(xx);
-                                double y = first_derivative_filter.filter(yy);
-                                return std::complex(x, y);
-                            } else {
                                 return std::complex(tula::alg::median(patch.real()),
                                                 tula::alg::median(patch.imag()));
-                            }
                         },
                         smooth_size,
                         iqs.segment(smooth_i0, nsweeps - smooth_size + 1));
+                    // set edge to const
+                        iqs.head(smooth_i0).setConstant(iqs.coeff(smooth_i0));
+                        iqs.tail(smooth_i0).setConstant(iqs.coeff(nsweeps - smooth_i0 - 1));
                 }
                 // do deriv
                 tula::alg::gradient(iqs, data.fs().col(c), diqs.col(c));
@@ -357,7 +351,9 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
                 auto [converged, summary] = tula::alg::ceresfit::fit<Model>(
                     data.fs().col(c), data.iqs().col(c), uncertainty.col(c),
                     ps.col(c),
-                    {{"Qc", tula::alg::ceresfit::ParamSetting<double>::getfixed(1.)},
+                    {
+                    // {"Qr", tula::alg::ceresfit::ParamSetting<double>::getbounded(0., lim_Qr_max)},
+                    {"Qc", tula::alg::ceresfit::ParamSetting<double>::getfixed(1.)},
                      {"A", ParamSetting::getfixed(0.)},
                      {"fp", ParamSetting::getfixed(ps.coeff(0, c))}});
                 // check if s21 does not improved the cost
