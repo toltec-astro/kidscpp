@@ -19,7 +19,8 @@ struct SweepFitter {
     TULA_ENUM_DECL(WeightOption, int,
               boxcar,
               gauss,
-              lorentz
+              lorentz,
+              none
               );
     TULA_ENUM_DECL(FittingOption, int,
               default_,

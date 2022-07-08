@@ -6,6 +6,7 @@
 #include "kids/toltec/toltec.h"
 #include "tula/filename.h"
 #include <tula/cli.h>
+#include <tula/algorithm/ei_stats.h>
 #include <tula/config/flatconfig.h>
 #include <tula/formatter/container.h>
 #include <tula/grppi.h>
@@ -95,10 +96,11 @@ struct fitter_options {
                                          50000., doub()),
         r(p("fitter_lim_gain_min"  ), "The min gain",
                                          1., doub()),
-       r(p("fitter_modelspec"         ), "The spec of S21 model to use",
+        r(p("fitter_modelspec"         ), "The spec of S21 model to use",
                                          Fitter::ModelSpec::gainlintrend,
                                          list(Fitter::ModelSpec{})),
-        r(p("output_processed"        ), "Save the reduced data",
+        r(p("fitter_auto_global_shift"), "Do fitting with two-passes to account for global shift."),
+        r(p("output_processed"     ), "Save the reduced data",
                                          "{stem}{suffix}.{ext}", opt_str("dest"))
         ); // clang-format on
     };
@@ -473,7 +475,37 @@ int run_cmdproc(const config_t &rc) {
                     return handle_result(result);
                 } else if constexpr (kind == KidsDataKind::TargetSweep) {
                     auto fitter = fitter_options::fitter(rc);
-                    auto result = timeit("fit s21 model", fitter, data);
+                    namespace eiu = tula::eigen_utils;
+                    std::vector<double> fs_init = eiu::to_stdvec(data.tones());
+                    if (rc.is_set("fitter_auto_global_shift") and rc.get_typed<bool>("fitter_auto_global_shift")) {
+                        // run pre-fit without weight window to derive intial shift
+                        SPDLOG_INFO("run prefit with config to get global shift"); 
+                        auto result = timeit(
+                            "prefit", fitter, data, fs_init,
+                            config_t{{"weight_window_type", {"none"}}});
+                        // calcuate global shift
+                        auto fout = result.output.col(0);
+                        auto fin = result.output.col(1);
+                        auto flag_ = result.output.col(2);
+                        auto ntones = result.output.rows();
+                        std::vector<double> f_shifts;
+                        using Flag = kids::SweepFitResult::Flag;
+                        const auto accept_flag =
+                            Flag::D21LargeOffset | Flag::D21NotConverged | Flag::D21QrOutOfRange | Flag::D21OutOfRange | Flag::D21FitsBetter; // | Flag::LargeOffset
+                        for (Eigen::Index i = 0; i < ntones; ++i) {
+                            auto flag = static_cast<Flag>(int(flag_.coeff(i)));
+                            if ((flag  | accept_flag) == accept_flag ) {
+                                f_shifts.push_back(fout.coeff(i) - fin.coeff(i));
+                            }
+                        }
+                        double f_shift{0.};
+                        if (!f_shifts.empty()) {
+                            f_shift  = tula::alg::median(tula::eigen_utils::as_eigen(f_shifts));
+                        }
+                        fs_init = eiu::to_stdvec(fin.array() + f_shift);
+                        SPDLOG_INFO("apply global shift={} computed from n_tones={} to initial fs: {}", f_shift, f_shifts.size(), fs_init);
+                    }
+                    auto result = timeit("fit s21 model", fitter, data, fs_init);
                     if (rc.is_set("output_processed")) {
                         result.save_processed(rc.get_str("output_processed"));
                     }

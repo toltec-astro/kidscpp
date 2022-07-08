@@ -81,7 +81,7 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
                     config.get_str("weight_window_type"), weight_option);
     }
     using WeightTypes = tula::meta::cases<WeightOption::boxcar, WeightOption::gauss,
-                                    WeightOption::lorentz>;
+                                    WeightOption::lorentz, WeightOption::none>;
     SPDLOG_DEBUG("use window type {}", weight_option);
     // auto window_width = config.get_typed<double>("weight_window_fwhm");
     auto window_Qr = config.get_typed<double>("weight_window_Qr");
@@ -103,6 +103,11 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
     uncertainty.setConstant(std::complex<double>{1., 1.});
     auto update_uncertainty = [&](auto weight_type_, auto c, auto f_c) {
         constexpr auto weight_type = std::decay_t<decltype(weight_type_)>::value;
+       if constexpr (weight_type == WeightOption::none) {
+           SPDLOG_TRACE("weight window set to none, set uncertainty to unity.");
+           uncertainty.col(c).setConstant(std::complex<double>{1., 1.});
+           return;
+       }
         auto window_width = f_c / window_Qr;
         auto f_l = f_c - window_width / 2.;
         auto f_u = f_c + window_width / 2.;
