@@ -5,9 +5,9 @@
 #include "kids/timestream/solver.h"
 #include "kids/toltec/toltec.h"
 #include "tula/filename.h"
-#include <tula/cli.h>
-#include <tula/algorithm/ei_stats.h>
 #include <tula/algorithm/ei_iterclip.h>
+#include <tula/algorithm/ei_stats.h>
+#include <tula/cli.h>
 #include <tula/config/flatconfig.h>
 #include <tula/formatter/container.h>
 #include <tula/grppi.h>
@@ -83,6 +83,10 @@ struct fitter_options {
         using namespace tula::cli::clipp_builder;
         // clang-format off
         return "fitter configs" % g(
+        r(p("fitter_tonelisttabledir"  ), "Look for tone list table file in this directory",
+                                         ".", str("dir")),
+        r(p("fitter_tonelisttablefile" ), "Use this tone list table file",
+                                         undef{}, str("file")),
         r(p("fitter_weight_window_type"), "Fit with weight window of this"
                                          " type applied",
                                          Fitter::WeightOption::lorentz,
@@ -109,6 +113,8 @@ struct fitter_options {
         Fitter::Config conf{};
         for (auto &[confkey, rckey] :
              keymap_t{{"output_processed", "output_processed"},
+                      {"tonelisttabledir", "fitter_tonelisttabledir"},
+                      {"tonelisttablefile", "fitter_tonelisttablefile"},
                       {"weight_window_type", "fitter_weight_window_type"},
                       // {"weight_window_fwhm", "fitter_weight_window_fwhm"},
                       {"weight_window_Qr", "fitter_weight_window_Qr"},
@@ -116,8 +122,8 @@ struct fitter_options {
                       {"lim_Qr_max", "fitter_lim_Qr_max"},
                       {"lim_gain_min", "fitter_lim_gain_min"},
                       {"modelspec", "fitter_modelspec"},
-                     {"finder_smooth_size", "finder_smooth_size"},
-                     {"finder_use_savgol_deriv", "finder_use_savgol_deriv"},
+                      {"finder_smooth_size", "finder_smooth_size"},
+                      {"finder_use_savgol_deriv", "finder_use_savgol_deriv"},
                       {"exmode", "grppiex"}}) {
             if (rc.is_set(rckey)) {
                 conf.set(confkey, rc.at(rckey));
@@ -406,7 +412,8 @@ int run_cmdproc(const config_t &rc) {
                         ex,
                         [&]() mutable -> std::optional<rts_t> {
                             std::scoped_lock lock(io_mutex);
-                            // tula::logging::scoped_loglevel<spdlog::level::debug> l0{};
+                            // tula::logging::scoped_loglevel<spdlog::level::debug>
+                            // l0{};
                             if (i >= chunks.size()) {
                                 return std::nullopt;
                             }
@@ -424,9 +431,9 @@ int run_cmdproc(const config_t &rc) {
                             SPDLOG_DEBUG("kidsdata ntimes={}",
                                          kidsdata.meta.template get_typed<int>(
                                              "sample_slice_size"));
-                            auto result = timeit(
-                                "solve xs", solver, kidsdata,
-                                config_t{{"extra_output", {false}}});
+                            auto result =
+                                timeit("solve xs", solver, kidsdata,
+                                       config_t{{"extra_output", {false}}});
                             {
                                 std::scoped_lock lock(io_mutex);
                                 result.append_to_nc(io);
@@ -477,14 +484,24 @@ int run_cmdproc(const config_t &rc) {
                 } else if constexpr (kind == KidsDataKind::TargetSweep) {
                     auto fitter = fitter_options::fitter(rc);
                     namespace eiu = tula::eigen_utils;
+                    if (rc.is_set("fitter_tonelisttabledir") || rc.is_set("fitter_tonelisttablefile")) {
+                        auto result = timeit("fit with tonelist table", [&](){return fitter.fit_tonelist(data);});
+                        if (rc.is_set("output_processed")) {
+                            result.save_processed(rc.get_str("output_processed"));
+                        }
+                        return handle_result(result);
+                    }
                     std::vector<double> fs_init = eiu::to_stdvec(data.tones());
-                    if (rc.is_set("fitter_auto_global_shift") and rc.get_typed<bool>("fitter_auto_global_shift")) {
-                        // run pre-fit without weight window to derive intial shift
-                        SPDLOG_INFO("run prefit with config to get global shift"); 
+                    if (rc.is_set("fitter_auto_global_shift") and
+                        rc.get_typed<bool>("fitter_auto_global_shift")) {
+                        // run pre-fit without weight window to derive intial
+                        // shift
+                        SPDLOG_INFO(
+                            "run prefit with config to get global shift");
                         auto result = timeit(
                             "prefit", fitter, data, fs_init
                             //, config_t{{"weight_window_type", {"none"}}}
-                            );
+                        );
                         // calcuate global shift
                         auto fin = data.tones();
                         auto ntones = fin.size();
@@ -493,34 +510,48 @@ int run_cmdproc(const config_t &rc) {
                         std::vector<double> f_shifts;
                         using Flag = kids::SweepFitResult::Flag;
                         const auto accept_flag =
-                            Flag::D21LargeOffset | Flag::D21NotConverged | Flag::D21QrOutOfRange | Flag::D21OutOfRange | Flag::D21FitsBetter; // | Flag::LargeOffset
+                            Flag::D21LargeOffset | Flag::D21NotConverged |
+                            Flag::D21QrOutOfRange | Flag::D21OutOfRange |
+                            Flag::D21FitsBetter; // | Flag::LargeOffset
                         for (Eigen::Index i = 0; i < ntones; ++i) {
                             auto flag = static_cast<Flag>(int(flag_.coeff(i)));
-                            if ((flag  | accept_flag) == accept_flag ) {
-                                f_shifts.push_back(fout.coeff(i) - fin.coeff(i));
+                            if ((flag | accept_flag) == accept_flag) {
+                                f_shifts.push_back(fout.coeff(i) -
+                                                   fin.coeff(i));
                             }
                         }
                         auto iterclip = tula::alg::iterclip(
                             // use median-MAD for robust statistics
-                            [](const auto &v) { return tula::alg::nanmedmad(v); },
+                            [](const auto &v) {
+                                return tula::alg::nanmedmad(v);
+                            },
                             [n = 5](const auto &v, const auto &c,
-                                                       const auto &s) { return (v <= c + n * s) && (v >= c - n * s); },
+                                    const auto &s) {
+                                return (v <= c + n * s) && (v >= c - n * s);
+                            },
                             5);
                         double f_shift{0.};
                         if (!f_shifts.empty()) {
-                            auto [s, c, center, std]  = iterclip(tula::eigen_utils::as_eigen(f_shifts));
-                            SPDLOG_DEBUG("iterclip f_shifts converged={} center={} std={}", c, center, std);
+                            auto [s, c, center, std] =
+                                iterclip(tula::eigen_utils::as_eigen(f_shifts));
+                            SPDLOG_DEBUG("iterclip f_shifts converged={} "
+                                         "center={} std={}",
+                                         c, center, std);
                             if (!c) {
-                                SPDLOG_INFO("f_shifts iterclip not converged, set global shift to 0.");
+                                SPDLOG_INFO("f_shifts iterclip not converged, "
+                                            "set global shift to 0.");
                                 f_shift = 0.;
                             } else {
                                 f_shift = center;
                             }
                         }
                         fs_init = eiu::to_stdvec(fin.array() + f_shift);
-                        SPDLOG_INFO("apply global shift={} computed from n_tones={} to initial fs: {}", f_shift, f_shifts.size(), fs_init);
+                        SPDLOG_INFO("apply global shift={} computed from "
+                                    "n_tones={} to initial fs: {}",
+                                    f_shift, f_shifts.size(), fs_init);
                     }
-                    auto result = timeit("fit s21 model", fitter, data, fs_init);
+                    auto result =
+                        timeit("fit s21 model", fitter, data, fs_init);
                     if (rc.is_set("output_processed")) {
                         result.save_processed(rc.get_str("output_processed"));
                     }

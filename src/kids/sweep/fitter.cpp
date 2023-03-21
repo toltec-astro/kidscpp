@@ -1,15 +1,19 @@
 #include "kids/sweep/fitter.h"
 #include "kids/sweep/model.h"
+#include <csv_parser/parser.hpp>
+#include <fstream>
+#include <gram_savitzky_golay/gram_savitzky_golay.h>
 #include <tula/algorithm/ei_ceresfitter.h>
+#include <tula/algorithm/ei_convolve.h>
 #include <tula/algorithm/ei_numdiff.h>
 #include <tula/algorithm/ei_stats.h>
-#include <tula/algorithm/ei_convolve.h>
+#include <tula/ceres/core.h>
 #include <tula/container.h>
+#include <tula/ecsv/table.h>
 #include <tula/eigen.h>
 #include <tula/formatter/enum.h>
 #include <tula/grppi.h>
 #include <tula/switch_invoke.h>
-#include <gram_savitzky_golay/gram_savitzky_golay.h>
 
 using Eigen::Index;
 using kids::SweepFitResult;
@@ -40,7 +44,7 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
         assert(ntones == data.tones().size());
         [[maybe_unused]] auto sweepspan = tula::alg::span(sfs);
         sweepstep = tula::alg::step(sfs);
-        [[maybe_unused]] auto tonespan = tula::alg::span(data.tones());
+        [[maybe_unused]] double tonespan = tula::alg::span(data.tones());
 
         toneranges.resize(2, ntones);
         toneranges.row(0) = data.fs().colwise().minCoeff();
@@ -80,8 +84,9 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
         SPDLOG_WARN("unknown weight window type {}, use {} instead",
                     config.get_str("weight_window_type"), weight_option);
     }
-    using WeightTypes = tula::meta::cases<WeightOption::boxcar, WeightOption::gauss,
-                                    WeightOption::lorentz, WeightOption::none>;
+    using WeightTypes =
+        tula::meta::cases<WeightOption::boxcar, WeightOption::gauss,
+                          WeightOption::lorentz, WeightOption::none>;
     SPDLOG_DEBUG("use window type {}", weight_option);
     // auto window_width = config.get_typed<double>("weight_window_fwhm");
     auto window_Qr = config.get_typed<double>("weight_window_Qr");
@@ -102,12 +107,14 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
     Eigen::MatrixXcd uncertainty(nsweeps, ntones);
     uncertainty.setConstant(std::complex<double>{1., 1.});
     auto update_uncertainty = [&](auto weight_type_, auto c, auto f_c) {
-        constexpr auto weight_type = std::decay_t<decltype(weight_type_)>::value;
-       if constexpr (weight_type == WeightOption::none) {
-           SPDLOG_TRACE("weight window set to none, set uncertainty to unity.");
-           uncertainty.col(c).setConstant(std::complex<double>{1., 1.});
-           return;
-       }
+        constexpr auto weight_type =
+            std::decay_t<decltype(weight_type_)>::value;
+        if constexpr (weight_type == WeightOption::none) {
+            SPDLOG_TRACE(
+                "weight window set to none, set uncertainty to unity.");
+            uncertainty.col(c).setConstant(std::complex<double>{1., 1.});
+            return;
+        }
         auto window_width = f_c / window_Qr;
         auto f_l = f_c - window_width / 2.;
         auto f_u = f_c + window_width / 2.;
@@ -174,10 +181,11 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
     d21ps.row(2) = s21ps.row(3); // input freqs
     // row 3 an 4 are norm_d21
     // 5 and 6 and const slope in s21
-    
+
     // d21 related
     bool use_savgol_deriv = config.get_typed<bool>("finder_use_savgol_deriv");
-    auto smooth_size = static_cast<Index>(config.get_typed<int>("finder_smooth_size"));
+    auto smooth_size =
+        static_cast<Index>(config.get_typed<int>("finder_smooth_size"));
     if (use_savgol_deriv) {
         if (smooth_size < 5) {
             throw std::runtime_error("smooth size too small for SavGol deriv");
@@ -189,46 +197,49 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
     }
     auto smooth_i0 = (smooth_size - 1) / 2; // valid index
     bool pre_smooth = (smooth_size > 0);
-    gram_sg::SavitzkyGolayFilter first_derivative_filter(
-        smooth_i0, 0, 2, 1, sweepstep);
+    gram_sg::SavitzkyGolayFilter first_derivative_filter(smooth_i0, 0, 2, 1,
+                                                         sweepstep);
     grppi::map(ex, toneindices, toneindices, [&](auto c) {
-        // tula::alg::gradient(data.iqs().col(c), data.fs().col(c), diqs.col(c));
-            // smooth and deriv
-            if  (use_savgol_deriv) {
-                //  we ensured the smooth size >=5 previously
-                // here we just write the deriv data to diqs
+        // tula::alg::gradient(data.iqs().col(c), data.fs().col(c),
+        // diqs.col(c)); smooth and deriv
+        if (use_savgol_deriv) {
+            //  we ensured the smooth size >=5 previously
+            // here we just write the deriv data to diqs
+            tula::alg::convolve1d(
+                data.iqs().col(c),
+                [&data, &use_savgol_deriv,
+                 &first_derivative_filter](const auto &patch) {
+                    // calculate the deriv
+                    auto xx = tula::eigen_utils::to_stdvec(patch.real());
+                    auto yy = tula::eigen_utils::to_stdvec(patch.imag());
+                    double x = first_derivative_filter.filter(xx);
+                    double y = first_derivative_filter.filter(yy);
+                    return std::complex(x, y);
+                },
+                smooth_size,
+                diqs.col(c).segment(smooth_i0, nsweeps - smooth_size + 1));
+        } else {
+            // do smooth if needed
+            Eigen::VectorXcd iqs(nsweeps);
+            iqs.setConstant(std::complex(0., 0.));
+            if (pre_smooth) {
                 tula::alg::convolve1d(
                     data.iqs().col(c),
-                    [&data, &use_savgol_deriv, &first_derivative_filter](const auto &patch) {
-                        // calculate the deriv
-                        auto xx = tula::eigen_utils::to_stdvec(patch.real());
-                        auto yy = tula::eigen_utils::to_stdvec(patch.imag());
-                        double x = first_derivative_filter.filter(xx);
-                        double y = first_derivative_filter.filter(yy);
-                        return std::complex(x, y);
+                    [&data, &use_savgol_deriv,
+                     &first_derivative_filter](const auto &patch) {
+                        return std::complex(tula::alg::median(patch.real()),
+                                            tula::alg::median(patch.imag()));
                     },
                     smooth_size,
-                    diqs.col(c).segment(smooth_i0, nsweeps - smooth_size + 1));
-            } else {
-                // do smooth if needed
-                Eigen::VectorXcd iqs(nsweeps);
-                iqs.setConstant(std::complex(0., 0.));
-               if (pre_smooth) {
-                    tula::alg::convolve1d(
-                        data.iqs().col(c),
-                        [&data, &use_savgol_deriv, &first_derivative_filter](const auto &patch) {
-                                return std::complex(tula::alg::median(patch.real()),
-                                                tula::alg::median(patch.imag()));
-                        },
-                        smooth_size,
-                        iqs.segment(smooth_i0, nsweeps - smooth_size + 1));
-                    // set edge to const
-                        iqs.head(smooth_i0).setConstant(iqs.coeff(smooth_i0));
-                        iqs.tail(smooth_i0).setConstant(iqs.coeff(nsweeps - smooth_i0 - 1));
-                }
-                // do deriv
-                tula::alg::gradient(iqs, data.fs().col(c), diqs.col(c));
+                    iqs.segment(smooth_i0, nsweeps - smooth_size + 1));
+                // set edge to const
+                iqs.head(smooth_i0).setConstant(iqs.coeff(smooth_i0));
+                iqs.tail(smooth_i0).setConstant(
+                    iqs.coeff(nsweeps - smooth_i0 - 1));
             }
+            // do deriv
+            tula::alg::gradient(iqs, data.fs().col(c), diqs.col(c));
+        }
         auto [converged, summary] = tula::alg::ceresfit::fit<D21>(
             data.fs().col(c), diqs.col(c), uncertainty.col(c), d21ps.col(c),
             {{"fp", ParamSetting::getfixed(d21ps.coeff(0, c))}});
@@ -264,8 +275,9 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
         SPDLOG_WARN("unknown model spec {}, use {} instead",
                     config.get_str("modelspec"), modelspec);
     }
-    using ModelSpecs = tula::meta::cases<ModelSpec::gain, ModelSpec::gainlintrend,
-                                   ModelSpec::trans, ModelSpec::translintrend>;
+    using ModelSpecs =
+        tula::meta::cases<ModelSpec::gain, ModelSpec::gainlintrend,
+                          ModelSpec::trans, ModelSpec::translintrend>;
     // dispatch different models
     auto fitresult = tula::meta::switch_invoke<ModelSpecs>(
         [&](auto spec_) {
@@ -351,9 +363,11 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
                 auto [converged, summary] = tula::alg::ceresfit::fit<Model>(
                     data.fs().col(c), data.iqs().col(c), uncertainty.col(c),
                     ps.col(c),
-                    {
-                    // {"Qr", tula::alg::ceresfit::ParamSetting<double>::getbounded(0., lim_Qr_max)},
-                    {"Qc", tula::alg::ceresfit::ParamSetting<double>::getfixed(1.)},
+                    {// {"Qr",
+                     // tula::alg::ceresfit::ParamSetting<double>::getbounded(0.,
+                     // lim_Qr_max)},
+                     {"Qc",
+                      tula::alg::ceresfit::ParamSetting<double>::getfixed(1.)},
                      {"A", ParamSetting::getfixed(0.)},
                      {"fp", ParamSetting::getfixed(ps.coeff(0, c))}});
                 // check if s21 does not improved the cost
@@ -386,7 +400,8 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
                     update_flag(Flag::QrOutOfRange, c);
                 }
                 // check S21 gain
-                auto gain = std::sqrt(ps(5, c) * ps(5, c) + ps(6, c) * ps(6, c));
+                auto gain =
+                    std::sqrt(ps(5, c) * ps(5, c) + ps(6, c) * ps(6, c));
                 if (gain < lim_gain_min) {
                     update_flag(Flag::LowGain, c);
                 }
@@ -448,7 +463,6 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
                                   }
                               });
                 return fmt::format("\n {{:{}s}}: {{}}", max_key_width);
-
             }();
             for (auto &[f, n] : flag_summary) {
                 auto fstr = fmt::format("{}", f);
@@ -472,5 +486,6 @@ SweepFitResult SweepFitter::operator()(const TargetSweepData &data,
     if (fitresult) {
         return fitresult.value();
     }
+
     throw std::runtime_error(fmt::format("unknown model spec {}", modelspec));
 }

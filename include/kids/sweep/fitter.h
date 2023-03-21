@@ -44,6 +44,10 @@ struct SweepFitter {
                     const std::vector<double> &inputs = {},
                     const Config &config = {}) -> SweepFitResult;
 
+    /// @brief fit with given tonelist table
+    auto fit_tonelist(const TargetSweepData &, const Config &config = {})
+        -> SweepFitResult;
+
     Config config;
 
     template <ModelSpec spec>
@@ -72,7 +76,8 @@ struct SweepFitResult {
               NotConverged    = 1 << 6,
               OutOfRange      = 1 << 7,
               QrOutOfRange    = 1 << 8,
-              LowGain         = 1 << 9
+              LowGain         = 1 << 9,
+              JointFit        = 1 << 10
             );
     // clang-format on
     SweepFitter::TargetSweepData data{};

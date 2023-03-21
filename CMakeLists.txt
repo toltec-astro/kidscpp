@@ -76,6 +76,7 @@ target_sources(kids
         "src/kids/sweep/finder.cpp"
         "src/kids/sweep/finderresult.cpp"
         "src/kids/sweep/fitter.cpp"
+        "src/kids/sweep/fitter_tonelist.cpp"
         "src/kids/sweep/fitresult.cpp"
         "src/kids/timestream/solver.cpp"
         "src/kids/timestream/solverresult.cpp"
