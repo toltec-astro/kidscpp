@@ -29,19 +29,32 @@ std::vector<std::pair<std::string, std::string>> _{
 template <typename Config, typename meta_t>
 auto loadfitreport(const Config &config, const meta_t &meta) {
     namespace fs = std::filesystem;
-    auto pattern = meta.get_str("cal_file");
+    // this is the pattern expected for the same obsnum
+    auto m = [&](const auto &key) { return meta.template get_typed<int>(key); };
+    auto pattern0 =
+        fmt::format("{}{:d}_{:06d}_{:03d}_0001.+\\.txt",
+                    meta.get_str("instru"), m("roachid"),
+                    m("obsid"), m("subobsid"));
+    // this is the pattern expected for the cal obsnum
+    auto pattern1 = meta.get_str("cal_file");
     std::string filepath{};
     if (config.has("fitreportfile")) {
         filepath = config.get_str("fitreportfile");
     } else if (config.has("fitreportdir")) {
         auto dir = config.get_str("fitreportdir");
-        SPDLOG_TRACE("look for fitreport dir {} with pattern {}", dir, pattern);
-        auto candidates = tula::filename_utils::find_regex(dir, pattern);
-        if (!candidates.empty()) {
-            filepath = candidates[0];
+        SPDLOG_TRACE("look for fitreport dir {} with pattern {}", dir, pattern0);
+        auto candidates0 = tula::filename_utils::find_regex(dir, pattern0);
+        if (!candidates0.empty()) {
+            filepath = candidates0[0];
         } else {
-            throw std::runtime_error(fmt::format(
-                "no fit report found in {} that matches {}", dir, pattern));
+            SPDLOG_TRACE("look for fitreport dir {} with cal pattern {}", dir, pattern1);
+            auto candidates1 = tula::filename_utils::find_regex(dir, pattern1);
+            if (!candidates1.empty()) {
+                filepath = candidates1[0];
+            } else {
+                throw std::runtime_error(fmt::format(
+                    "no fit report found in {} that matches {} or {}", dir, pattern0, pattern1));
+            }
         }
     } else {
         throw std::runtime_error(
