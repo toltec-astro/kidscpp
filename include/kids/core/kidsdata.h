@@ -44,32 +44,32 @@ template <size_t N, auto kind>
 struct variant_alternative<N, kids::KidsData<kind>>
     : variant_alternative<N, typename kids::KidsData<kind>::variant_t> {};
 
-#if defined(__GNUC__) && !defined(__clang__)
-#if (__GNUC__ >= 9)
-// this is need to allow inherit from std::variant on GCC
-namespace __detail {
-namespace __variant {
-
-template <typename _Ret, typename _Visitor, auto kind, size_t __first>
-struct _Multi_array<_Ret (*)(_Visitor, kids::KidsData<kind>), __first>
-    : _Multi_array<_Ret (*)(_Visitor, typename kids::KidsData<kind>::variant_t),
-                   __first> {
-    static constexpr int __do_cookie = 0;
-};
-template <typename _Maybe_variant_cookie, auto kind>
-struct _Extra_visit_slot_needed<_Maybe_variant_cookie, kids::KidsData<kind>>
-    : _Extra_visit_slot_needed<_Maybe_variant_cookie,
-                               typename kids::KidsData<kind>::variant_t> {};
-
-template <typename _Maybe_variant_cookie, auto kind>
-struct _Extra_visit_slot_needed<_Maybe_variant_cookie, kids::KidsData<kind> &>
-    : _Extra_visit_slot_needed<_Maybe_variant_cookie,
-                               typename kids::KidsData<kind>::variant_t &> {};
-} // namespace __variant
-} // namespace __detail
-#else
-#endif
-#endif
+// #if defined(__GNUC__) && !defined(__clang__)
+// #if (__GNUC__ >= 9)
+// // this is need to allow inherit from std::variant on GCC
+// namespace __detail {
+// namespace __variant {
+// 
+// template <typename _Ret, typename _Visitor, auto kind, size_t __first>
+// struct _Multi_array<_Ret (*)(_Visitor, kids::KidsData<kind>), __first>
+//     : _Multi_array<_Ret (*)(_Visitor, typename kids::KidsData<kind>::variant_t),
+//                    __first> {
+//     static constexpr int __do_cookie = 0;
+// };
+// template <typename _Maybe_variant_cookie, auto kind>
+// struct _Extra_visit_slot_needed<_Maybe_variant_cookie, kids::KidsData<kind>>
+//     : _Extra_visit_slot_needed<_Maybe_variant_cookie,
+//                                typename kids::KidsData<kind>::variant_t> {};
+// 
+// template <typename _Maybe_variant_cookie, auto kind>
+// struct _Extra_visit_slot_needed<_Maybe_variant_cookie, kids::KidsData<kind> &>
+//     : _Extra_visit_slot_needed<_Maybe_variant_cookie,
+//                                typename kids::KidsData<kind>::variant_t &> {};
+// } // namespace __variant
+// } // namespace __detail
+// #else
+// #endif
+// #endif
 
 } // namespace std
 
@@ -270,7 +270,7 @@ struct formatter<kids::ToneAxis>
     : formatter<kids::wcs::FrameBase<kids::ToneAxis>> {
     using Base = formatter<kids::wcs::FrameBase<kids::ToneAxis>>;
     template <typename FormatContext>
-    auto format(const kids::ToneAxis &data, FormatContext &ctx) {
+    auto format(const kids::ToneAxis &data, FormatContext &ctx) const {
         auto it = Base::format(data, ctx);
         return it = format_to(it, " labels={}", data.row_labels());
     }
@@ -280,7 +280,7 @@ struct formatter<kids::SweepAxis>
     : formatter<kids::wcs::FrameBase<kids::SweepAxis>> {
     using Base = formatter<kids::wcs::FrameBase<kids::SweepAxis>>;
     template <typename FormatContext>
-    auto format(const kids::SweepAxis &data, FormatContext &ctx) {
+    auto format(const kids::SweepAxis &data, FormatContext &ctx) const {
         return Base::format(data, ctx);
     }
 };
@@ -289,7 +289,7 @@ struct formatter<kids::TimeAxis>
     : formatter<kids::wcs::FrameBase<kids::TimeAxis>> {
     using Base = formatter<kids::wcs::FrameBase<kids::TimeAxis>>;
     template <typename FormatContext>
-    auto format(const kids::TimeAxis &data, FormatContext &ctx) {
+    auto format(const kids::TimeAxis &data, FormatContext &ctx) const {
         return Base::format(data, ctx);
     }
 };
@@ -302,7 +302,7 @@ struct formatter<kids::KidsData<kind_>>
     using Data = kids::KidsData<kind_>;
 
     template <typename FormatContext>
-    auto format(const Data &data, FormatContext &ctx) {
+    auto format(const Data &data, FormatContext &ctx) const {
         using data_traits = kids::internal::impl_traits<Data>;
         auto it = ctx.out();
         constexpr auto kind = Data::kind();
@@ -361,7 +361,7 @@ struct formatter<kids::KidsData<kind_>>
     }
     template <typename T, typename FormatContextOut>
     auto format_member(FormatContextOut &it, std::string_view name, const T &m,
-                       bool *sep = nullptr) {
+                       bool *sep = nullptr) const {
         auto spec = spec_handler();
         switch (spec) {
         case 's': {

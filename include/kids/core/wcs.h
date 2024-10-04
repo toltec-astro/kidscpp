@@ -171,7 +171,7 @@ struct formatter<kids::wcs::FrameBase<Derived>, Char>
 
     template <typename FormatContext>
     auto format(const kids::wcs::FrameBase<Derived> &data_,
-                FormatContext &ctx) {
+                FormatContext &ctx) const {
         const auto &data = data_.derived();
         auto it = ctx.out();
         /// format simple kind type

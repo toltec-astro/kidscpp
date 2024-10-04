@@ -35,6 +35,8 @@ VectorXd fftfs(Index npts, Index nfs, double df) {
 
 enum Window { NoWindow = 0, Hann = 1, HannScaled = 2 };
 
+auto format_as(Window s) { return fmt::underlying(s); }
+
 inline auto hann(Index npts) {
     // hann window
     // N numbers starting from 0 to (include) 2pi/N * (N-1)

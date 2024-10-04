@@ -276,7 +276,7 @@ struct formatter<tula::ceres_utils::Parameter<T>>
     : tula::fmt_utils::nullspec_formatter_base {
     template <typename FormatContext>
     auto format(const tula::ceres_utils::Parameter<T> &param,
-                FormatContext &ctx) {
+                FormatContext &ctx) const {
         auto it = ctx.out();
         return format_to(it, "P({},value={},lower={},upper={},vary={})",
                          param.name, param.value, param.lower_bound,
@@ -289,7 +289,7 @@ struct formatter<tula::ceres_utils::Parameters<T>>
     : tula::fmt_utils::nullspec_formatter_base {
     template <typename FormatContext>
     auto format(const tula::ceres_utils::Parameters<T> &params,
-                FormatContext &ctx) {
+                FormatContext &ctx) const {
         auto it = ctx.out();
         return format_to(it, "Ps({})", params.params());
     }
