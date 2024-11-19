@@ -5,6 +5,7 @@ CMakeCache.*
 CMakeFiles/*
 CMakeUserPresets.json
 [Tt]esting/*
+.DS_Store
 
 ### VisualStudioCode ###
 .vscode/*
