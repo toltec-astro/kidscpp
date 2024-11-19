@@ -21,8 +21,8 @@
       "description": "Brew installed LLVM on macOS",
       "hidden": true,
       "cacheVariables": {
-        "CMAKE_C_COMPILER": "/usr/local/opt/llvm/bin/clang",
-        "CMAKE_CXX_COMPILER": "/usr/local/opt/llvm/bin/clang++"
+        "CMAKE_C_COMPILER": "/opt/homebrew/opt/llvm/bin/clang",
+        "CMAKE_CXX_COMPILER": "/opt/homebrew/opt/llvm/bin/clang++"
       },
       "condition": {
         "type": "equals",
@@ -40,8 +40,8 @@
       "description": "Brew installed GCC-11 on macOS",
       "hidden": true,
       "cacheVariables": {
-        "CMAKE_C_COMPILER": "/usr/local/opt/gcc/bin/gcc-11",
-        "CMAKE_CXX_COMPILER": "/usr/local/opt/gcc/bin/g++-11"
+        "CMAKE_C_COMPILER": "/opt/homebrew/opt/gcc/bin/gcc-11",
+        "CMAKE_CXX_COMPILER": "/opt/homebrew/opt/gcc/bin/g++-11"
       },
       "condition": {
         "type": "equals",
@@ -102,56 +102,32 @@
     {
       "name": "brew-llvm-release",
       "description": "Release with brew-llvm",
-      "inherits": [
-        "release",
-        "brew-llvm",
-        "base"
-      ]
+      "inherits": ["release", "brew-llvm", "base"]
     },
     {
       "name": "brew-gcc-11-release",
       "description": "Release with brew-gcc-11",
-      "inherits": [
-        "release",
-        "brew-gcc-11",
-        "base"
-      ]
+      "inherits": ["release", "brew-gcc-11", "base"]
     },
     {
       "name": "linux-gcc-release",
       "description": "Release with linux-gcc",
-      "inherits": [
-        "release",
-        "linux-gcc",
-        "base"
-      ]
+      "inherits": ["release", "linux-gcc", "base"]
     },
     {
       "name": "brew-llvm-debug",
       "description": "Debug with brew-llvm",
-      "inherits": [
-        "debug",
-        "brew-llvm",
-        "base"
-      ]
+      "inherits": ["debug", "brew-llvm", "base"]
     },
     {
       "name": "brew-gcc-11-debug",
       "description": "Debug with brew-gcc-11",
-      "inherits": [
-        "debug",
-        "brew-gcc-11",
-        "base"
-      ]
+      "inherits": ["debug", "brew-gcc-11", "base"]
     },
     {
       "name": "linux-gcc-debug",
       "description": "Debug with linux-gcc",
-      "inherits": [
-        "debug",
-        "linux-gcc",
-        "base"
-      ]
+      "inherits": ["debug", "linux-gcc", "base"]
     }
   ],
   "buildPresets": [
@@ -166,9 +142,7 @@
     },
     {
       "name": "verbose",
-      "nativeToolOptions": [
-        "-v"
-      ],
+      "nativeToolOptions": ["-v"],
       "hidden": true,
       "vendor": {
         "tula_cmake": {
@@ -198,11 +172,7 @@
           "type": "configurePresets",
           "name": "{compiler}-{build_type}",
           "description": "{build_type} with {compiler}",
-          "inherits": [
-            "{build_type}",
-            "{compiler}",
-            "base"
-          ]
+          "inherits": ["{build_type}", "{compiler}", "base"]
         }
       ]
     }

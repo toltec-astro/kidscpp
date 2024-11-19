@@ -84,7 +84,7 @@ struct fitter_options {
         // clang-format off
         return "fitter configs" % g(
         r(p("fitter_tonelisttabledir"  ), "Look for tone list table file in this directory",
-                                         ".", str("dir")),
+                                         undef{}, str("dir")),
         r(p("fitter_tonelisttablefile" ), "Use this tone list table file",
                                          undef{}, str("file")),
         r(p("fitter_weight_window_type"), "Fit with weight window of this"
