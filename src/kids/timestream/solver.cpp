@@ -99,7 +99,7 @@ kids::TimeStreamSolverResult kids::TimeStreamSolver::operator()(
         // tula::logging::scoped_loglevel<spdlog::level::trace> l0;
         std::tie(tone_axis, meta_cal) = loadfitreport(config, data.meta);
     } catch (std::runtime_error &e) {
-        SPDLOG_WARN("unable to load fitreport file: {}", e.what());
+        SPDLOG_CRITICAL("unable to load fitreport file: {}", e.what());
         SPDLOG_INFO("use built-in model params");
         tone_axis = data.wcs.tone_axis;
     }
