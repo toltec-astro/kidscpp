@@ -1,5 +1,33 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#   "conan>=2.10",
+#   "tula-cmake",
+# ]
+#
+# [tool.uv.sources]
+# # Local editable source (sibling directory, monorepo layout):
+# tula-cmake = { path = "../tula/tula_cmake" }
+# # Once pyproject.toml is merged to the remote, switch to:
+# # tula-cmake = { git = "https://github.com/toltec-astro/tula_cmake.git" }
+# ///
+#
+# Self-bootstrapping Conan recipe.
+#
+# When loaded by Conan (normal use):
+#   conan install . --profile=$(tula-cmake profiles-dir)/linux-gcc14-debug ...
+#
+# When run directly with uv (zero-install bootstrap):
+#   uv run conanfile.py install . --profile=... -o "&:Eigen3=conan" ...
+#   ./conanfile.py install . ...          # chmod +x first
+#
+# uv installs conan + tula-cmake into an isolated venv, then forwards all
+# arguments to `conan`.  The `# /// script` block is plain comments to Python
+# so Conan never sees it.
+
 try:
-    from tula_cmake import TulaConan          # pip install -e /path/to/tula/tula_cmake
+    from tula_cmake import TulaConan          # pip install -e /path/to/tula_cmake
 except ImportError:
     import os, sys
     from pathlib import Path
@@ -11,9 +39,9 @@ except ImportError:
     else:
         raise ImportError(
             "tula_cmake not found.\n"
-            "  Install: pip install -e /path/to/tula/tula_cmake\n"
+            "  Install: pip install -e /path/to/tula_cmake\n"
             "  Or set:  TULA_CMAKE_DIR=/path/to/tula_cmake\n"
-            "  Or run:  tula-cmake fetch --project-root ."
+            "  Or bootstrap: uv run conanfile.py install ."
         )
     from tula_conan import TulaConan
 
@@ -37,7 +65,7 @@ class KidsCppRecipe(TulaConan):
       - Clipp    (conan)  - CLI parsing
 
     Usage (from /workspaces/cpp/kidscpp):
-        conan install . \\
+        uv run conanfile.py install . \\
           --profile:build=$(tula-cmake profiles-dir)/linux-gcc14-debug \\
           --profile:host=$(tula-cmake profiles-dir)/linux-gcc14-debug \\
           -o "&:Eigen3=conan" -o "&:logging=conan" -o "&:Yaml=conan" \\
@@ -46,3 +74,8 @@ class KidsCppRecipe(TulaConan):
           --build=missing --output-folder=build/gcc14-debug
     """
     pass
+
+
+if __name__ == "__main__":
+    import subprocess, sys
+    raise SystemExit(subprocess.run(["conan"] + sys.argv[1:]).returncode)
