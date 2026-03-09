@@ -1,48 +1,21 @@
-import os
-import subprocess
-import sys
-from pathlib import Path
-
-
-def _find_tula_cmake(project_root: Path = Path(__file__).parent) -> Path:
-    """Locate tula_cmake locally or fetch from GitHub (sparse clone).
-
-    Search order:
-      1. Sibling directory: <project_root>/../tula/tula_cmake/
-      2. TULA_CMAKE_DIR environment variable
-      3. Sparse-checkout cache: <project_root>/.tula_bootstrap/tula/tula_cmake/
-         (auto-populated via git clone --sparse on first use)
-
-    Override the remote with:
-      TULA_GIT_REPO  (default: https://github.com/toltec-astro/tula.git)
-      TULA_GIT_TAG   (default: main)
-    """
-    # 1. Sibling directory (monorepo / side-by-side clone)
-    sibling = project_root.parent / "tula" / "tula_cmake"
-    if (sibling / "tula_conan.py").exists():
-        return sibling
-    # 2. Environment variable
-    if (env := os.environ.get("TULA_CMAKE_DIR")):
-        p = Path(env)
-        if (p / "tula_conan.py").exists():
-            return p
-    # 3. Sparse-checkout cache
-    cache = project_root / ".tula_bootstrap" / "tula"
-    tula_cmake = cache / "tula_cmake"
-    if not (tula_cmake / "tula_conan.py").exists():
-        repo = os.environ.get("TULA_GIT_REPO", "https://github.com/toltec-astro/tula.git")
-        tag  = os.environ.get("TULA_GIT_TAG",  "main")
-        print(f"[tula] fetching tula_cmake ({tag}) from {repo}")
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["git", "clone", "--depth=1", "--filter=blob:none",
-                        "--sparse", "--branch", tag, repo, str(cache)], check=True)
-        subprocess.run(["git", "-C", str(cache), "sparse-checkout", "set",
-                        "tula_cmake"], check=True)
-    return tula_cmake
-
-
-sys.path.insert(0, str(_find_tula_cmake()))
-from tula_conan import TulaConan
+try:
+    from tula_cmake import TulaConan          # pip install -e /path/to/tula/tula_cmake
+except ImportError:
+    import os, sys
+    from pathlib import Path
+    _root = Path(__file__).parent
+    for _d in [Path(os.environ.get("TULA_CMAKE_DIR", "")),
+               _root.parent / "tula" / "tula_cmake"]:
+        if _d and (_d / "tula_conan.py").exists():
+            sys.path.insert(0, str(_d)); break
+    else:
+        raise ImportError(
+            "tula_cmake not found.\n"
+            "  Install: pip install -e /path/to/tula/tula_cmake\n"
+            "  Or set:  TULA_CMAKE_DIR=/path/to/tula_cmake\n"
+            "  Or run:  tula-cmake fetch --project-root ."
+        )
+    from tula_conan import TulaConan
 
 
 class KidsCppRecipe(TulaConan):
@@ -65,8 +38,8 @@ class KidsCppRecipe(TulaConan):
 
     Usage (from /workspaces/cpp/kidscpp):
         conan install . \\
-          --profile:build=../tula/tula_cmake/profiles/linux-gcc14-debug \\
-          --profile:host=../tula/tula_cmake/profiles/linux-gcc14-debug \\
+          --profile:build=$(tula-cmake profiles-dir)/linux-gcc14-debug \\
+          --profile:host=$(tula-cmake profiles-dir)/linux-gcc14-debug \\
           -o "&:Eigen3=conan" -o "&:logging=conan" -o "&:Yaml=conan" \\
           -o "&:Enum=cpm" -o "&:Grppi=cpm" -o "&:Ceres=conan" \\
           -o "&:Clipp=conan" -o "&:NetCDF=system" -o "&:NetCDFCXX4=system" \\
