@@ -1,4 +1,6 @@
 build/
+**/build/
+**/CMakeUserPresets.json
 .tula_bootstrap/
 *.pyc
 *~

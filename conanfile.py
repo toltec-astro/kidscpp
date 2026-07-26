@@ -1,81 +1,71 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.10"
-# dependencies = [
-#   "conan>=2.10",
-#   "tula-cmake",
-# ]
-#
-# [tool.uv.sources]
-# # Local editable source (sibling directory, monorepo layout):
-# tula-cmake = { path = "../tula/tula_cmake" }
-# # Once pyproject.toml is merged to the remote, switch to:
-# # tula-cmake = { git = "https://github.com/toltec-astro/tula_cmake.git" }
-# ///
-#
-# Self-bootstrapping Conan recipe.
-#
-# When loaded by Conan (normal use):
-#   conan install . --profile=$(tula-cmake profiles-dir)/linux-gcc14-debug ...
-#
-# When run directly with uv (zero-install bootstrap):
-#   uv run conanfile.py install . --profile=... -o "&:Eigen3=conan" ...
-#   ./conanfile.py install . ...          # chmod +x first
-#
-# uv installs conan + tula-cmake into an isolated venv, then forwards all
-# arguments to `conan`.  The `# /// script` block is plain comments to Python
-# so Conan never sees it.
+from conan import ConanFile
+from conan.tools.cmake import CMake
 
-try:
-    from tula_cmake import TulaConan          # pip install -e /path/to/tula_cmake
-except ImportError:
-    import os, sys
-    from pathlib import Path
-    _root = Path(__file__).parent
-    for _d in [Path(os.environ.get("TULA_CMAKE_DIR", "")),
-               _root.parent / "tula" / "tula_cmake"]:
-        if _d and (_d / "tula_conan.py").exists():
-            sys.path.insert(0, str(_d)); break
-    else:
-        raise ImportError(
-            "tula_cmake not found.\n"
-            "  Install: pip install -e /path/to/tula_cmake\n"
-            "  Or set:  TULA_CMAKE_DIR=/path/to/tula_cmake\n"
-            "  Or bootstrap: uv run conanfile.py install ."
+
+class KidsCppRecipe(ConanFile):
+    """Conan 2 recipe for the trimmed kidscpp timestream package."""
+
+    name = "kidscpp"
+    version = "3.1.0"
+    description = "TolTEC KIDs timestream processing library"
+    license = "BSD-3-Clause"
+    url = "https://github.com/toltec-astro/kidscpp"
+    package_type = "static-library"
+    required_conan_version = ">=2.31"
+    python_requires = "tula-cmake/3.1.0"
+    python_requires_extend = "tula-cmake.TulaConan"
+    settings = ()
+    options = {}
+    default_options = {
+        "tula/*:logging": "conan",
+        "tula/*:yaml_cpp": "conan",
+        "tula/*:csv_parser": "cpm",
+        "tula/*:netcdf_c": "system",
+        "tula/*:netcdf_cxx4": "system",
+        "tula/*:bitmask": "cpm",
+        "tula/*:meta_enum": "cpm",
+        "tula/*:perflibs": "system",
+        "tula/*:eigen": "conan",
+        "tula/*:grppi": "cpm",
+    }
+    tula_default_options = {
+        "logging": "conan",
+        "yaml_cpp": "conan",
+        "csv_parser": "cpm",
+        "netcdf_c": "system",
+        "netcdf_cxx4": "system",
+        "bitmask": "cpm",
+        "meta_enum": "cpm",
+        "perflibs": "system",
+        "eigen": "conan",
+        "grppi": "cpm",
+    }
+    tula_public_features = tuple(tula_default_options)
+    exports_sources = "CMakeLists.txt", "include/*", "src/*", "tests/*"
+
+    def requirements(self) -> None:
+        super().requirements()
+        self.requires(
+            "tula/3.1.0",
+            transitive_headers=True,
+            transitive_libs=True,
         )
-    from tula_conan import TulaConan
 
+    def build_requirements(self) -> None:
+        if not self.conf.get("tools.build:skip_test", default=False, check_type=bool):
+            self.test_requires("gtest/1.17.0")
 
-class KidsCppRecipe(TulaConan):
-    """
-    kidscpp v3: KIDs data processing for TolTEC — timestream solving.
+    def build(self) -> None:
+        cmake = CMake(self)
+        cmake.configure()
+        cmake.build()
+        if not self.conf.get("tools.build:skip_test", default=False, check_type=bool):
+            cmake.ctest()
 
-    Heavy port of refs/kidscpp, trimmed to timestream solving only.
-    Sweep finding/fitting is now handled by Python.
+    def package(self) -> None:
+        CMake(self).install()
 
-    Dependencies (via tula v3 conan-centric build):
-      - Eigen3   (conan)  - linear algebra
-      - logging  (conan)  - spdlog + fmt
-      - Yaml     (conan)  - yaml-cpp config
-      - Enum     (cpm)    - meta_enum + bitmask
-      - Grppi    (cpm)    - parallel patterns
-      - Ceres    (conan)  - non-linear optimization (sweep model calibration)
-      - NetCDF   (system) - NetCDF file I/O (system-installed 4.9.2)
-      - NetCDFCXX4(system)- NetCDF C++ bindings (system-installed 4.3.1)
-      - Clipp    (conan)  - CLI parsing
-
-    Usage (from /workspaces/cpp/kidscpp):
-        uv run conanfile.py install . \\
-          --profile:build=$(tula-cmake profiles-dir)/linux-gcc14-debug \\
-          --profile:host=$(tula-cmake profiles-dir)/linux-gcc14-debug \\
-          -o "&:Eigen3=conan" -o "&:logging=conan" -o "&:Yaml=conan" \\
-          -o "&:Enum=cpm" -o "&:Grppi=cpm" -o "&:Ceres=conan" \\
-          -o "&:Clipp=conan" -o "&:NetCDF=system" -o "&:NetCDFCXX4=system" \\
-          --build=missing --output-folder=build/gcc14-debug
-    """
-    pass
-
-
-if __name__ == "__main__":
-    import subprocess, sys
-    raise SystemExit(subprocess.run(["conan"] + sys.argv[1:]).returncode)
+    def package_info(self) -> None:
+        self.cpp_info.set_property("cmake_file_name", "kidscpp")
+        self.cpp_info.set_property("cmake_target_name", "kids::kids")
+        self.cpp_info.libs = ["kids"]
