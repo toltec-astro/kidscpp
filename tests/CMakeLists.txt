@@ -2,7 +2,7 @@ find_package(GTest CONFIG REQUIRED)
 
 include(GoogleTest)
 
-foreach(_name welch solver)
+foreach(_name toltec_timestream welch solver)
     add_executable("kids_test_${_name}" "test_${_name}.cpp")
     target_link_libraries(
         "kids_test_${_name}"

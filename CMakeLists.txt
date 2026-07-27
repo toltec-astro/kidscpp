@@ -9,11 +9,18 @@ project(kidscpp
 include(TulaProject)
 tula_resolve_features()
 find_package(tula CONFIG REQUIRED)
+tula_add_config_header(
+    TARGET kidscpp_config
+    ALIAS kids::config
+    PREFIX KIDSCPP
+    OUTPUT kids/config.h
+)
 
 add_library(kids STATIC)
 target_sources(
     kids
     PRIVATE
+        src/kids/toltec/timestream.cpp
         src/kids/timestream/solver.cpp
         src/kids/timestream/solverresult.cpp
 )
@@ -36,6 +43,7 @@ target_link_libraries(
         tula::perflibs
         tula::eigen
         tula::grppi
+        kids::config
 )
 target_compile_features(kids PUBLIC cxx_std_23)
 add_library(kids::kids ALIAS kids)
@@ -52,3 +60,7 @@ install(
     ARCHIVE DESTINATION lib
 )
 install(DIRECTORY include/ DESTINATION include)
+install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/kids/config.h"
+    DESTINATION include/kids
+)
