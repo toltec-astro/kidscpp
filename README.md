@@ -1,60 +1,49 @@
-# kidscpp
+# Kidscpp 3.1
 
-`kidscpp` is the C++ TolTEC timestream-processing package. The v3 port keeps
-the intentionally trimmed scope from the archived v3 rewrite: timestream
-solving remains in C++, while sweep finding and fitting are owned by the
-Python pipeline.
+Kidscpp is the TolTEC KIDs timestream-processing library. The
+`v3.x_spack` branch is an ordinary CMake package with an owned decentralized
+Spack recipe.
 
-The package is a downstream consumer of `tula/3.1.0`; dependency acquisition
-and CMake target normalization are provided by `tula_cmake`.
+## Ownership boundary
 
-## TolTEC raw-data boundary
+Kidscpp owns:
 
-Kidscpp owns the narrow NetCDF-to-timestream boundary used by Citlali:
+- raw TolTEC NetCDF metadata inspection;
+- file-slice to `KidsData<RawTimeStream>` conversion;
+- timestream solver/model behavior; and
+- the `kids::kids` installed CMake target.
 
-```cpp
-#include <kids/toltec/timestream.h>
+Citlali selects observation files and sample slices, then calls the Kidscpp
+reader and solver APIs. Citlali does not duplicate the NetCDF adapter. The old
+multipurpose Kidscpp CLI and sweep fitter are not part of this focused library.
 
-auto meta = kids::toltec::get_raw_timestream_meta(filepath);
-auto raw = kids::toltec::read_raw_timestream_slice(
-    filepath, kids::toltec::SampleSlice{start, stop, step});
-auto solved = kids::TimeStreamSolver{config}(raw);
+## Use
+
+```cmake
+find_package(kidscpp 3.1 CONFIG REQUIRED)
+target_link_libraries(my_target PRIVATE kids::kids)
 ```
 
-The reader validates `ObsType=1`, maps TolTEC metadata, reads sliced `Ts`,
-`Is`, and `Qs`, and constructs the absolute tone-frequency/model axis needed
-by `TimeStreamSolver`. It does not restore the former generic sweep/data
-dispatcher, Kidscpp CLI, or sweep fitter.
+Its exported config discovers Tula and propagates the complete installed target
+closure.
 
-Production compatibility details are explicit: calibration fit-report names
-retain their zero-padded observation/sub-observation/scan pattern, raw files
-select the same first tone/model block as v1, and early files may supply the
-time axis as `Data.Toltec.Xs` when `Data.Toltec.Ts` is absent.
+## Development and tests
 
-Citlali owns observation orchestration and chooses sample slices; it calls this
-Kidscpp API rather than maintaining a second NetCDF parser.
+From the workspace dev container:
 
-## Build
-
-```sh
-./build
+```console
+spack -e tula_cmake/environments/production/gcc14 \
+  install --test=all --overwrite kidscpp
+spack -e tula_cmake/environments/production/llvm20 \
+  install --test=all --overwrite kidscpp
 ```
 
-The launcher obtains the pinned `tula_cmake` CLI and runs the Conan install
-plus generated CMake preset workflow. A configured TolTEC Conan remote
-supplies `tula-cmake/3.1.0` and `tula/3.1.0`; Tula is not fetched as a CMake
-subproject.
+The supported lanes are GCC 14 and LLVM/Clang 20, both C++23. Seven tests cover
+metadata and slice ingestion, invalid stride and observation-type behavior,
+PSD construction, and the timestream solver. The real tests automatically use
+the sibling `tolteca_test_data` checkout; a missing fixture is visible as a
+skip rather than silently treated as coverage.
 
-For this multi-repository development workspace:
-
-```sh
-TULA_CMAKE_DEV_PROJECT=../tula_cmake ./build
-```
-
-The package publishes `kids::kids`. Its Conan `test_package` compiles a
-separate consumer after package creation.
-
-When the sibling `tolteca_test_data` repository is available, the workspace
-gate sets `TOLTECA_TEST_DATA_ROOT` and verifies the reader against the 2024
-`toltec0_018230_111_0000` timestream fixture. Without that environment
-variable, only the real-file cases are reported as skipped.
+`tests/installed_consumer` independently verifies the installed `kids::kids`
+package. Run the complete production chain with `just production` from the
+workspace root.

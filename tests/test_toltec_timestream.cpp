@@ -1,9 +1,12 @@
 #include <kids/toltec/timestream.h>
 
 #include <gtest/gtest.h>
+#include <netcdf>
 
 #include <cstdlib>
 #include <filesystem>
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -15,6 +18,40 @@ constexpr auto fixture_relative_path =
 {
     return std::filesystem::path{std::getenv("TOLTECA_TEST_DATA_ROOT")} /
            fixture_relative_path;
+}
+
+[[nodiscard]] auto metadata_fixture_path(int obs_type)
+    -> std::filesystem::path
+{
+    const auto path = std::filesystem::temp_directory_path() /
+                      ("kidscpp-obstype-" + std::to_string(obs_type) + ".nc");
+    std::filesystem::remove(path);
+    {
+        netCDF::NcFile file{path.string(), netCDF::NcFile::replace};
+        const auto time = file.addDim("time", 1);
+        const auto time_fields = file.addDim("timeDataLen", 6);
+        const auto iq = file.addDim("iqlen", 1);
+        const auto tone = file.addDim("toneFreqLen", 1);
+        file.addDim("loclen", 1);
+        file.addDim("numSweeps", 1);
+        file.addDim("modelParamsNum", 0);
+
+        auto kind = file.addVar("Header.Toltec.ObsType", netCDF::ncInt);
+        kind.putVar(&obs_type);
+        file.addVar(
+            "Data.Toltec.Is", netCDF::ncDouble,
+            std::vector<netCDF::NcDim>{time, iq});
+        file.addVar(
+            "Data.Toltec.Qs", netCDF::ncDouble,
+            std::vector<netCDF::NcDim>{time, iq});
+        file.addVar(
+            "Header.Toltec.ToneFreq", netCDF::ncDouble,
+            std::vector<netCDF::NcDim>{tone});
+        file.addVar(
+            "Data.Toltec.Ts", netCDF::ncInt,
+            std::vector<netCDF::NcDim>{time, time_fields});
+    }
+    return path;
 }
 
 TEST(ToltecTimeStream, ReadsRealMetadataAndSlice)
@@ -69,6 +106,23 @@ TEST(ToltecTimeStream, RejectsNonPositiveStride)
         static_cast<void>(kids::toltec::read_raw_timestream_slice(
             fixture_path(), kids::toltec::SampleSlice{0, 2, 0})),
         kids::toltec::RawTimeStreamIOError);
+}
+
+TEST(ToltecTimeStream, AcceptsProductionScienceObsTypeZero)
+{
+    const auto path = metadata_fixture_path(0);
+    const auto meta = kids::toltec::get_raw_timestream_meta(path);
+    EXPECT_EQ(meta.get_typed<int>("kindvar"), 0);
+    std::filesystem::remove(path);
+}
+
+TEST(ToltecTimeStream, RejectsKnownSweepObsType)
+{
+    const auto path = metadata_fixture_path(2);
+    EXPECT_THROW(
+        static_cast<void>(kids::toltec::get_raw_timestream_meta(path)),
+        kids::toltec::RawTimeStreamIOError);
+    std::filesystem::remove(path);
 }
 
 } // namespace

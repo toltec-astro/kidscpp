@@ -170,9 +170,13 @@ void set_scalar_if_present(
     }
 
     const auto kind = meta.get_typed<int>("kindvar", 1);
-    if (kind != 1) {
+    // The production reader treated unrecognized ObsType values as raw
+    // timestreams after validating the I/Q and frequency variables below.
+    // In particular, current TolTEC science files use ObsType=0. Preserve
+    // that behavior while still rejecting the known sweep kinds.
+    if (kind >= 2 && kind <= 4) {
         throw RawTimeStreamIOError{
-            "expected TolTEC raw timestream ObsType=1, found " +
+            "expected a TolTEC raw timestream, found sweep ObsType=" +
             std::to_string(kind)};
     }
     const auto roachid = meta.get_typed<int>("roachid", -1);

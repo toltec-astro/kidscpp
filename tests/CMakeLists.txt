@@ -12,5 +12,8 @@ foreach(_name toltec_timestream welch solver)
     gtest_discover_tests(
         "kids_test_${_name}"
         TEST_PREFIX "kidscpp::"
+        PROPERTIES
+            ENVIRONMENT
+                "TOLTECA_TEST_DATA_ROOT=${TOLTECA_TEST_DATA_ROOT}"
     )
 endforeach()

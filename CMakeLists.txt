@@ -1,22 +1,43 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(kidscpp
+project(
+    kidscpp
     VERSION 3.1.0
     DESCRIPTION "KIDs timestream processing for TolTEC"
+    HOMEPAGE_URL "https://github.com/toltec-astro/kidscpp"
     LANGUAGES CXX
 )
 
-include(TulaProject)
-tula_resolve_features()
-find_package(tula CONFIG REQUIRED)
-tula_add_config_header(
+include(CTest)
+include(GNUInstallDirs)
+
+find_package(TulaCMake 3 CONFIG REQUIRED)
+find_package(
+    tula 3.1 CONFIG REQUIRED
+    COMPONENTS
+        core
+        logging
+        ecsv
+        eigen
+        netcdf
+        enum
+        grppi
+)
+
+add_library(kidscpp_config INTERFACE)
+add_library(kids::config ALIAS kidscpp_config)
+set_target_properties(kidscpp_config PROPERTIES EXPORT_NAME config)
+tula_cmake_generate_config_header(
     TARGET kidscpp_config
-    ALIAS kids::config
-    PREFIX KIDSCPP
-    OUTPUT kids/config.h
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/include/kids/config.h.in"
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/kids/config.h"
+    BUILD_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )
 
 add_library(kids STATIC)
+add_library(kids::kids ALIAS kids)
+set_target_properties(kids PROPERTIES EXPORT_NAME kids)
+tula_cmake_target_defaults(TARGET kids)
 target_sources(
     kids
     PRIVATE
@@ -28,39 +49,61 @@ target_include_directories(
     kids
     PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-        "$<INSTALL_INTERFACE:include>"
+        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
 target_link_libraries(
     kids
     PUBLIC
-        tula::headers
+        tula::core
         tula::logging
-        tula::yaml_cpp
-        tula::csv_parser
-        tula::netcdf_cxx4
-        tula::bitmask
-        tula::meta_enum
-        tula::perflibs
+        tula::ecsv
         tula::eigen
+        tula::netcdf
+        tula::enum
         tula::grppi
         kids::config
 )
-target_compile_features(kids PUBLIC cxx_std_23)
-add_library(kids::kids ALIAS kids)
-
-option(KIDS_BUILD_TESTS "Build kidscpp behavior tests" "${PROJECT_IS_TOP_LEVEL}")
-if(KIDS_BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
-endif()
 
 install(
-    TARGETS kids
-    EXPORT kidscpp_targets
-    ARCHIVE DESTINATION lib
+    DIRECTORY include/
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    PATTERN "config.h.in" EXCLUDE
 )
-install(DIRECTORY include/ DESTINATION include)
 install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/kids/config.h"
-    DESTINATION include/kids
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/kids"
 )
+tula_cmake_install_package(
+    PACKAGE kidscpp
+    EXPORT kidscppTargets
+    NAMESPACE kids::
+    VERSION "${PROJECT_VERSION}"
+    TARGETS kids kidscpp_config
+    CONFIG_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/kidscppConfig.cmake.in"
+)
+
+option(
+    KIDS_BUILD_TESTS
+    "Build and run Kidscpp behavior tests"
+    "${PROJECT_IS_TOP_LEVEL}"
+)
+if(KIDS_BUILD_TESTS)
+    set(
+        TOLTECA_TEST_DATA_ROOT
+        ""
+        CACHE PATH
+        "Path to the tolteca_test_data checkout used by real NetCDF tests"
+    )
+    if(NOT TOLTECA_TEST_DATA_ROOT)
+        set(_tolteca_test_data_candidate
+            "${CMAKE_CURRENT_SOURCE_DIR}/../tolteca_test_data")
+        if(IS_DIRECTORY "${_tolteca_test_data_candidate}")
+            cmake_path(
+                ABSOLUTE_PATH _tolteca_test_data_candidate
+                NORMALIZE
+                OUTPUT_VARIABLE TOLTECA_TEST_DATA_ROOT
+            )
+        endif()
+    endif()
+    add_subdirectory(tests)
+endif()
