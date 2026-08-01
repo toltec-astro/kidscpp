@@ -27,6 +27,10 @@ target_link_libraries(my_target PRIVATE kids::kids)
 Its exported config discovers Tula and propagates the complete installed target
 closure.
 
+The Spack `+openmp` variant (enabled by default) selects the matching Tula
+performance closure. `kidscpp~openmp` preserves the same Kidscpp APIs while
+building its transitive Tula/GrPPI layer without an OpenMP runtime.
+
 ## Development and tests
 
 From the workspace dev container:

@@ -4,6 +4,7 @@ from spack.package import (
     depends_on,
     on_package_attributes,
     run_after,
+    variant,
     version,
     working_dir,
 )
@@ -18,11 +19,23 @@ class Kidscpp(CMakePackage):
 
     version("3.1.0")
 
+    variant(
+        "openmp",
+        default=True,
+        description="Enable OpenMP in the transitive Tula performance layer",
+    )
+
     depends_on("cmake@3.25:", type="build")
     depends_on("cxx", type="build")
     depends_on("tula-cmake@3.2.0", type="build")
     depends_on(
         "tula@3.1.0+ecsv+netcdf+enum+grppi+openmp",
+        when="+openmp",
+        type=("build", "link"),
+    )
+    depends_on(
+        "tula@3.1.0+ecsv+netcdf+enum+grppi~openmp",
+        when="~openmp",
         type=("build", "link"),
     )
     depends_on("googletest@1.14:~shared", type=("build", "test"))
