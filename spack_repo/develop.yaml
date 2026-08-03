@@ -1,0 +1,4 @@
+# Spack develop packages owned by this source repository.
+# Paths are relative to the repository root.
+develop:
+  kidscpp: {spec: "kidscpp@3.1.0", path: .}

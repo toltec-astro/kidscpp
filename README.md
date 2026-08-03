@@ -27,27 +27,32 @@ target_link_libraries(my_target PRIVATE kids::kids)
 Its exported config discovers Tula and propagates the complete installed target
 closure.
 
+`spack_repo/develop.yaml` declares the local `kidscpp` development spec and
+source path. Deployment environments compose this repository-owned metadata
+with the equivalent declarations from TulaCMake, Tula, and Citlali.
+
 The Spack `+openmp` variant (enabled by default) selects the matching Tula
 performance closure. `kidscpp~openmp` preserves the same Kidscpp APIs while
 building its transitive Tula/GrPPI layer without an OpenMP runtime.
 
 ## Development and tests
 
-From the workspace dev container:
+From an activated `tolteca_deploy` development location:
 
 ```console
-spack -e tula_cmake/environments/production/gcc14 \
-  install --test=all --overwrite kidscpp
-spack -e tula_cmake/environments/production/llvm20 \
-  install --test=all --overwrite kidscpp
+cd ../toltec_astro_dev
+source dotbashrc
+just cpp-install
+spack -e "$TOLTECA_CPP_ENV" install --test=root --overwrite kidscpp
 ```
 
-The supported lanes are GCC 14 and LLVM/Clang 20, both C++23. Seven tests cover
+Select `development/linux-gcc14` or `development/linux-llvm20` in
+`location.yaml`; both use C++23. Seven tests cover
 metadata and slice ingestion, invalid stride and observation-type behavior,
 PSD construction, and the timestream solver. The real tests automatically use
 the sibling `tolteca_test_data` checkout; a missing fixture is visible as a
 skip rather than silently treated as coverage.
 
 `tests/installed_consumer` independently verifies the installed `kids::kids`
-package. Run the complete production chain with `just production` from the
-workspace root.
+package. TulaCMake's focused matrix recipes remain available for package-level
+regression work; deployment and full-chain installation use the location.
