@@ -17,3 +17,8 @@ foreach(_name toltec_timestream welch solver)
                 "TOLTECA_TEST_DATA_ROOT=${TOLTECA_TEST_DATA_ROOT}"
     )
 endforeach()
+
+target_compile_definitions(
+    kids_test_toltec_timestream
+    PRIVATE KIDS_HAS_REAL_TEST_DATA=${KIDS_HAS_REAL_TEST_DATA}
+)

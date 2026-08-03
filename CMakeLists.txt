@@ -123,5 +123,19 @@ if(KIDS_BUILD_TESTS)
             )
         endif()
     endif()
+    string(
+        CONCAT _kids_real_fixture
+        "${TOLTECA_TEST_DATA_ROOT}/data_lmt/toltec/ics/toltec0/"
+        "toltec0_018230_111_0000_2024_05_20_13_40_08_timestream.nc"
+    )
+    if(EXISTS "${_kids_real_fixture}")
+        set(KIDS_HAS_REAL_TEST_DATA 1)
+    else()
+        set(KIDS_HAS_REAL_TEST_DATA 0)
+        message(
+            STATUS
+            "(kidscpp) real NetCDF test disabled: fixture not found"
+        )
+    endif()
     add_subdirectory(tests)
 endif()

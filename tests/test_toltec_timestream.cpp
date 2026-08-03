@@ -54,12 +54,9 @@ constexpr auto fixture_relative_path =
     return path;
 }
 
+#if KIDS_HAS_REAL_TEST_DATA
 TEST(ToltecTimeStream, ReadsRealMetadataAndSlice)
 {
-    if (std::getenv("TOLTECA_TEST_DATA_ROOT") == nullptr) {
-        GTEST_SKIP()
-            << "set TOLTECA_TEST_DATA_ROOT to run the real-file test";
-    }
     const auto path = fixture_path();
     ASSERT_TRUE(std::filesystem::is_regular_file(path)) << path;
 
@@ -95,17 +92,16 @@ TEST(ToltecTimeStream, ReadsRealMetadataAndSlice)
     EXPECT_EQ(data.meta.get_typed<int>("sample_slice_step"), 1);
     EXPECT_EQ(data.meta.get_typed<int>("sample_slice_size"), 2);
 }
+#endif
 
 TEST(ToltecTimeStream, RejectsNonPositiveStride)
 {
-    if (std::getenv("TOLTECA_TEST_DATA_ROOT") == nullptr) {
-        GTEST_SKIP()
-            << "set TOLTECA_TEST_DATA_ROOT to run the real-file test";
-    }
+    const auto path = metadata_fixture_path(0);
     EXPECT_THROW(
         static_cast<void>(kids::toltec::read_raw_timestream_slice(
-            fixture_path(), kids::toltec::SampleSlice{0, 2, 0})),
+            path, kids::toltec::SampleSlice{0, 2, 0})),
         kids::toltec::RawTimeStreamIOError);
+    std::filesystem::remove(path);
 }
 
 TEST(ToltecTimeStream, AcceptsProductionScienceObsTypeZero)
