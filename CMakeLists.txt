@@ -38,6 +38,22 @@ add_library(kids STATIC)
 add_library(kids::kids ALIAS kids)
 set_target_properties(kids PROPERTIES EXPORT_NAME kids)
 tula_cmake_target_defaults(TARGET kids)
+set(KIDSCPP_PACKAGE_SPEC "" CACHE STRING "Concrete Spack package spec")
+set(KIDSCPP_DAG_HASH "" CACHE STRING "Concrete Spack dependency DAG hash")
+set(TOLTECA_BUILD_PROFILE "" CACHE STRING "tolteca_deploy profile identity")
+set(TOLTECA_LOCK_SHA256 "" CACHE STRING "SHA-256 of the deployment Spack lock")
+tula_cmake_generate_version_header(
+    TARGET kids
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/kids/version.h"
+    BUILD_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated"
+    NAMESPACE "kids::build"
+    VERSION "${PROJECT_VERSION}"
+    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
+    PACKAGE_SPEC "${KIDSCPP_PACKAGE_SPEC}"
+    DAG_HASH "${KIDSCPP_DAG_HASH}"
+    BUILD_PROFILE "${TOLTECA_BUILD_PROFILE}"
+    LOCK_SHA256 "${TOLTECA_LOCK_SHA256}"
+)
 target_sources(
     kids
     PRIVATE
@@ -70,7 +86,9 @@ install(
     PATTERN "config.h.in" EXCLUDE
 )
 install(
-    FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/kids/config.h"
+    FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/generated/kids/config.h"
+        "${CMAKE_CURRENT_BINARY_DIR}/generated/kids/version.h"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/kids"
 )
 tula_cmake_install_package(
