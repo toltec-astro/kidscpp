@@ -47,12 +47,18 @@ spack -e "$TOLTECA_CPP_ENV" install --test=root --overwrite kidscpp
 ```
 
 Select `development/linux-gcc14` or `development/linux-llvm20` in
-`location.yaml`; both use C++23. Seven tests cover
+`location.yaml`; both use C++23. The complete development suite has seven tests covering
 metadata and slice ingestion, invalid stride and observation-type behavior,
-PSD construction, and the timestream solver. The real tests automatically use
-the sibling `tolteca_test_data` checkout; a missing fixture is visible as a
-skip rather than silently treated as coverage.
+PSD construction, and the timestream solver. When the exact sibling
+`tolteca_test_data` fixture exists, configuration enables the real reader
+case. Source-release builds retain generated NetCDF coverage without reporting
+the unavailable large-data case as a skipped success.
 
 `tests/installed_consumer` independently verifies the installed `kids::kids`
 package. TulaCMake's focused matrix recipes remain available for package-level
 regression work; deployment and full-chain installation use the location.
+
+The installed `<kids/version.h>` reports semantic/source version, tree state,
+compiler, C++ standard, package spec, DAG hash, profile, and lock identity.
+Release recipe tag `v3.1.0` is locked to
+`8d80a80ae6683db8391973de02fd3457b90a9a3c`.
