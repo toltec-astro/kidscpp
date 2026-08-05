@@ -58,7 +58,10 @@ the unavailable large-data case as a skipped success.
 package. TulaCMake's focused matrix recipes remain available for package-level
 regression work; deployment and full-chain installation use the location.
 
-The installed `<kids/version.h>` reports semantic/source version, tree state,
-compiler, C++ standard, package spec, DAG hash, profile, and lock identity.
-Release recipe tag `v3.1.0` is locked to
-`8d80a80ae6683db8391973de02fd3457b90a9a3c`.
+The installed `<kids/version.h>` reports artifact identity: semantic/source
+version, tree state, compiler, C++ standard, package spec, and DAG hash.
+Deployment profile and lock identity are runtime properties and are not
+embedded in a shareable Kidscpp installation. The current clean-source recipe
+selects immutable commit
+`06b3130ba7f6f96b509011c5855f635f76a25087`; final tag naming is intentionally
+deferred.

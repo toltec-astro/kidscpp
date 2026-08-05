@@ -18,7 +18,7 @@ class Kidscpp(CMakePackage):
     homepage = "https://github.com/toltec-astro/kidscpp"
     git = "https://github.com/toltec-astro/kidscpp.git"
 
-    version("3.1.0", commit="8d80a80ae6683db8391973de02fd3457b90a9a3c")
+    version("3.1.0", commit="06b3130ba7f6f96b509011c5855f635f76a25087")
 
     variant(
         "openmp",
