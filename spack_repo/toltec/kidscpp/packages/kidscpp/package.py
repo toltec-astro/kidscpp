@@ -1,7 +1,5 @@
 """Spack package for TolTEC KIDs timestream processing."""
 
-import os
-
 from spack.package import (
     depends_on,
     on_package_attributes,
@@ -20,7 +18,7 @@ class Kidscpp(CMakePackage):
     homepage = "https://github.com/toltec-astro/kidscpp"
     git = "https://github.com/toltec-astro/kidscpp.git"
 
-    version("3.1.0", tag="v3.1.0")
+    version("3.1.0", commit="8d80a80ae6683db8391973de02fd3457b90a9a3c")
 
     variant(
         "openmp",
@@ -49,14 +47,6 @@ class Kidscpp(CMakePackage):
             self.define("KIDS_BUILD_TESTS", self.run_tests),
             self.define("KIDSCPP_PACKAGE_SPEC", str(self.spec)),
             self.define("KIDSCPP_DAG_HASH", self.spec.dag_hash()),
-            self.define(
-                "TOLTECA_BUILD_PROFILE",
-                os.environ.get("TOLTECA_BUILD_PROFILE", ""),
-            ),
-            self.define(
-                "TOLTECA_LOCK_SHA256",
-                os.environ.get("TOLTECA_LOCK_SHA256", ""),
-            ),
         ]
 
     @run_after("build")

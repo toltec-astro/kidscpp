@@ -40,8 +40,6 @@ set_target_properties(kids PROPERTIES EXPORT_NAME kids)
 tula_cmake_target_defaults(TARGET kids)
 set(KIDSCPP_PACKAGE_SPEC "" CACHE STRING "Concrete Spack package spec")
 set(KIDSCPP_DAG_HASH "" CACHE STRING "Concrete Spack dependency DAG hash")
-set(TOLTECA_BUILD_PROFILE "" CACHE STRING "tolteca_deploy profile identity")
-set(TOLTECA_LOCK_SHA256 "" CACHE STRING "SHA-256 of the deployment Spack lock")
 tula_cmake_generate_version_header(
     TARGET kids
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/kids/version.h"
@@ -51,8 +49,6 @@ tula_cmake_generate_version_header(
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
     PACKAGE_SPEC "${KIDSCPP_PACKAGE_SPEC}"
     DAG_HASH "${KIDSCPP_DAG_HASH}"
-    BUILD_PROFILE "${TOLTECA_BUILD_PROFILE}"
-    LOCK_SHA256 "${TOLTECA_LOCK_SHA256}"
 )
 target_sources(
     kids
